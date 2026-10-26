@@ -1,0 +1,39 @@
+using UnityEngine;
+
+namespace TheSpaceBetween
+{
+    /// <summary>
+    /// Describe what this component does and which GameObject it belongs on.
+    /// </summary>
+    public class #SCRIPTNAME# : MonoBehaviour
+    {
+        //==================== CONFIGURATION =====================
+        [Header("Configuration")]
+        [Tooltip("Explain what this value controls and how it is measured.")]
+        [SerializeField, Min(0f)] private float exampleValue = 1f;
+
+        //==================== DEBUG =====================
+        [Header("Debug")]
+        [Tooltip("Write diagnostic messages to the Console. Leave this off during normal play.")]
+        [SerializeField] private bool logDebugMessages;
+
+        //==================== PUBLIC API =====================
+        public float ExampleValue => exampleValue;
+
+        //==================== LIFECYCLE =====================
+        private void Awake()
+        {
+            // Check required references here and report a clear message when one is missing.
+            Log("Awake");
+        }
+
+        //==================== PRIVATE =====================
+        private void Log(string message)
+        {
+            if (logDebugMessages)
+            {
+                Debug.Log($"[{nameof(#SCRIPTNAME#)}] '{name}': {message}", this);
+            }
+        }
+    }
+}

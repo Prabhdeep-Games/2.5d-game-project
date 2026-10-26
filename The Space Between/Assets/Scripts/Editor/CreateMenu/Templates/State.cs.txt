@@ -1,0 +1,32 @@
+using UnityEngine;
+
+namespace TheSpaceBetween
+{
+    /// <summary>
+    /// Describe the behaviour this state represents and when it should become active.
+    /// Add it to the same GameObject as a StateMachine and place it in the machine's priority list.
+    /// </summary>
+    public class #SCRIPTNAME# : State
+    {
+        public override bool CanRun()
+        {
+            // Return true when this state should be active. Keep it cheap and free of side effects.
+            return false;
+        }
+
+        public override void OnEnter()
+        {
+            // Setup when the state starts.
+        }
+
+        public override void Tick()
+        {
+            // Per-frame logic while this state is active. Do not use Update in a state.
+        }
+
+        public override void OnExit()
+        {
+            // Cleanup when the state ends.
+        }
+    }
+}

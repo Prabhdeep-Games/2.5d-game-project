@@ -1,0 +1,20 @@
+using UnityEngine;
+
+namespace TheSpaceBetween
+{
+    /// <summary>
+    /// Describe which kind of thing this data configures and which component reads it.
+    /// Create assets with Assets > Create > The Space Between > Data.
+    /// </summary>
+    [CreateAssetMenu(fileName = "#SCRIPTNAME#", menuName = "The Space Between/Data/#SCRIPTNAME#")]
+    public class #SCRIPTNAME# : ScriptableObject
+    {
+        //==================== STATS =====================
+        [Header("Stats")]
+        [Tooltip("Explain what this value controls and how it is measured.")]
+        [SerializeField, Min(0f)] private float exampleValue = 1f;
+
+        //==================== PUBLIC API =====================
+        public float ExampleValue => exampleValue;
+    }
+}

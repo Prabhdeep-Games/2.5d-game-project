@@ -1,0 +1,10 @@
+namespace TheSpaceBetween
+{
+    /// <summary>
+    /// Describe the single capability this interface represents.
+    /// </summary>
+    public interface #SCRIPTNAME#
+    {
+        // Declare the members every implementation must provide.
+    }
+}

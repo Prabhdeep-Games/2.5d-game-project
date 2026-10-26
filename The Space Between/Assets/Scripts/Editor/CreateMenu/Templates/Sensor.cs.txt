@@ -1,0 +1,30 @@
+using UnityEngine;
+
+namespace TheSpaceBetween
+{
+    /// <summary>
+    /// Describe what this sensor detects and how it finds its targets.
+    /// Report results with AddSignal, UpdateSignalDistance, and RemoveSignal.
+    /// </summary>
+    public class #SCRIPTNAME# : Sensor
+    {
+        //==================== CONFIGURATION =====================
+        [Header("Detection")]
+        [Tooltip("Maximum distance at which targets are detected, in world units.")]
+        [SerializeField, Min(0f)] private float range = 5f;
+
+        //==================== LIFECYCLE =====================
+        private void Update()
+        {
+            // Find targets here. Call AddSignal for each target found (or UpdateSignalDistance
+            // when it is already known) and RemoveSignal for each target that is no longer detected.
+        }
+
+        //==================== GIZMOS =====================
+        private void OnDrawGizmosSelected()
+        {
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawWireSphere(transform.position, range);
+        }
+    }
+}
