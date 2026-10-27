@@ -26,6 +26,12 @@ namespace TheSpaceBetween
         private Rigidbody body;
         private CharacterController characterController;
 
+        private bool frozen;
+        private bool controllerWasEnabled;
+        private bool bodyWasDynamic;
+        private Vector3 frozenLinearVelocity;
+        private Vector3 frozenAngularVelocity;
+
         //==================== OUTPUTS =====================
         public bool CanSwap
         {
@@ -82,9 +88,70 @@ namespace TheSpaceBetween
             }
         }
 
+        public bool IsFrozen => frozen;
+
         //==================== PUBLIC API =====================
+        /// <summary>
+        /// Holds this object still for an animation: the character controller is switched off and a
+        /// dynamic Rigidbody becomes kinematic, with its velocity remembered for Unfreeze.
+        /// </summary>
+        public void Freeze()
+        {
+            CacheComponents();
+
+            if (frozen)
+            {
+                return;
+            }
+
+            frozen = true;
+
+            controllerWasEnabled = characterController != null && characterController.enabled;
+            if (controllerWasEnabled)
+            {
+                characterController.enabled = false;
+            }
+
+            bodyWasDynamic = body != null && !body.isKinematic;
+            if (bodyWasDynamic)
+            {
+                frozenLinearVelocity = body.linearVelocity;
+                frozenAngularVelocity = body.angularVelocity;
+                body.isKinematic = true;
+            }
+        }
+
+        /// <summary>Releases a Freeze and gives a dynamic Rigidbody back the velocity it had.</summary>
+        public void Unfreeze()
+        {
+            if (!frozen)
+            {
+                return;
+            }
+
+            frozen = false;
+
+            if (controllerWasEnabled)
+            {
+                characterController.enabled = true;
+            }
+
+            if (bodyWasDynamic)
+            {
+                body.isKinematic = false;
+                body.linearVelocity = frozenLinearVelocity;
+                body.angularVelocity = frozenAngularVelocity;
+            }
+        }
+
         /// <summary>Moves this object to a world position and removes all of its momentum.</summary>
         public void MoveTo(Vector3 position)
+        {
+            MoveTo(position, false);
+        }
+
+        /// <summary>Moves this object to a world position, optionally keeping the momentum it had.</summary>
+        public void MoveTo(Vector3 position, bool keepMomentum)
         {
             CacheComponents();
 
@@ -105,6 +172,15 @@ namespace TheSpaceBetween
             if (body != null)
             {
                 body.position = position;
+            }
+
+            if (keepMomentum)
+            {
+                return;
+            }
+
+            if (body != null && !body.isKinematic)
+            {
                 body.linearVelocity = Vector3.zero;
                 body.angularVelocity = Vector3.zero;
             }

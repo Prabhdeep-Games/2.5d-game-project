@@ -56,6 +56,9 @@ namespace TheSpaceBetween.Tests
         [TearDown]
         public void DestroyCreatedObjects()
         {
+            // A failed test must never leave game time stopped for the next one.
+            Time.timeScale = 1f;
+
             foreach (Object obj in created)
             {
                 if (obj != null)

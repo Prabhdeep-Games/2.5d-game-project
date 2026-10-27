@@ -65,7 +65,7 @@ namespace TheSpaceBetween
         [Tooltip("Result of the most recent attempt.")]
         [ReadOnly, SerializeField] private SwapRejection lastResult;
 
-        private Swappable self;
+        protected Swappable self;
         private readonly Collider[] candidateBuffer = new Collider[MaxCandidates];
         private readonly Collider[] clearanceBuffer = new Collider[MaxCandidates];
         private readonly Swappable[] candidates = new Swappable[MaxCandidates];
@@ -88,27 +88,35 @@ namespace TheSpaceBetween
             swapAction.AddBinding("<Gamepad>/buttonWest");
         }
 
-        private void Awake()
+        protected virtual void Awake()
         {
             self = GetComponent<Swappable>();
         }
 
-        private void OnEnable()
+        protected virtual void OnEnable()
         {
             swapAction.performed += OnSwapPerformed;
             swapAction.Enable();
         }
 
-        private void OnDisable()
+        protected virtual void OnDisable()
         {
             swapAction.performed -= OnSwapPerformed;
             swapAction.Disable();
         }
 
         //==================== PUBLIC API =====================
-        /// <summary>Attempts a swap with the nearest valid target. Returns true when a swap happened.</summary>
+        /// <summary>True while a swap is still playing out. New attempts are ignored until it ends.</summary>
+        public virtual bool IsSwapping => false;
+
+        /// <summary>Attempts a swap with the nearest valid target. Returns true when a swap was accepted.</summary>
         public bool TrySwap()
         {
+            if (IsSwapping)
+            {
+                return false;
+            }
+
             int count = GatherCandidates();
             if (count == 0)
             {
@@ -231,7 +239,7 @@ namespace TheSpaceBetween
 
         private bool HasClearance(Swappable target)
         {
-            Vector3 shiftOfSelf = target.Anchor - self.Anchor;
+            Vector3 shiftOfSelf = SelfShiftTo(target);
 
             // Where each body will be after the swap, shrunk a little so resting on a floor is not an overlap.
             Bounds selfAfter = ShiftedAndShrunk(self.WorldBounds, shiftOfSelf);
@@ -267,16 +275,36 @@ namespace TheSpaceBetween
             return new Bounds(source.center + shift, extents * 2f);
         }
 
-        private void Execute(Swappable target)
+        /// <summary>
+        /// Carries out an accepted swap. The default moves both bodies at once and removes their
+        /// momentum. Subclasses override this to play a different kind of swap.
+        /// </summary>
+        protected virtual void Execute(Swappable target)
         {
-            // Each body moves by the gap between the two anchors, so they trade standing points.
-            Vector3 shiftOfSelf = target.Anchor - self.Anchor;
-            Vector3 selfDestination = self.Position + shiftOfSelf;
-            Vector3 targetDestination = target.Position - shiftOfSelf;
+            Vector3 shiftOfSelf = SelfShiftTo(target);
 
-            self.MoveTo(selfDestination);
-            target.MoveTo(targetDestination);
+            self.MoveTo(self.Position + shiftOfSelf);
+            target.MoveTo(target.Position - shiftOfSelf);
             Physics.SyncTransforms();
+        }
+
+        /// <summary>
+        /// How far this body must move to trade standing points with the target. The target moves
+        /// by the opposite amount.
+        /// </summary>
+        protected Vector3 SelfShiftTo(Swappable target)
+        {
+            return target.Anchor - self.Anchor;
+        }
+
+        /// <summary>Whether something solid is directly below the bottom of the given body.</summary>
+        protected bool IsStandingOnSomething(Swappable body)
+        {
+            const float probeLift = 0.05f;
+            const float probeLength = 0.15f;
+
+            Vector3 origin = body.Anchor + Vector3.up * probeLift;
+            return Physics.Raycast(origin, Vector3.down, probeLength, clearanceLayers, QueryTriggerInteraction.Ignore);
         }
 
         private bool Finish(SwapRejection result, Swappable target)

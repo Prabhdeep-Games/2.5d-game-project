@@ -11,7 +11,7 @@ namespace TheSpaceBetween
     /// It reads its own input actions, so no Player Input component is needed on the player.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
-    public class PlaceholderPlayerController : MonoBehaviour, IMotionResettable
+    public class PlaceholderPlayerController : MonoBehaviour, IMotionResettable, IAirJumpGrantable
     {
         private const float GroundedStickSpeed = -2f;
 
@@ -42,7 +42,12 @@ namespace TheSpaceBetween
         [Tooltip("Current vertical speed.")]
         [ReadOnly, SerializeField] private float verticalSpeed;
 
+        [Tooltip("Extra jumps that can still be used in mid-air. A swap that leaves the player airborne grants one.")]
+        [ReadOnly, SerializeField] private int airJumpsLeft;
+
         private CharacterController controller;
+        private Swappable swappable;
+        private bool treatAsAirborneThisFrame;
 
         //==================== LIFECYCLE =====================
         private void Reset()
@@ -63,6 +68,7 @@ namespace TheSpaceBetween
         private void Awake()
         {
             controller = GetComponent<CharacterController>();
+            swappable = GetComponent<Swappable>();
         }
 
         private void OnEnable()
@@ -79,16 +85,36 @@ namespace TheSpaceBetween
 
         private void Update()
         {
-            isGrounded = controller.isGrounded;
-
-            if (isGrounded && verticalSpeed < 0f)
+            // A swap in progress holds the player still, so input is ignored until it ends.
+            if (swappable != null && swappable.IsFrozen)
             {
-                verticalSpeed = GroundedStickSpeed;
+                return;
             }
 
-            if (isGrounded && jumpAction.WasPressedThisFrame())
+            // Right after a teleport the controller's grounded flag is out of date, so one frame is skipped.
+            isGrounded = controller.isGrounded && !treatAsAirborneThisFrame;
+            treatAsAirborneThisFrame = false;
+
+            if (isGrounded)
             {
-                verticalSpeed = Mathf.Sqrt(2f * gravity * jumpHeight);
+                airJumpsLeft = 0;
+                if (verticalSpeed < 0f)
+                {
+                    verticalSpeed = GroundedStickSpeed;
+                }
+            }
+
+            if (jumpAction.WasPressedThisFrame())
+            {
+                if (isGrounded)
+                {
+                    verticalSpeed = JumpSpeed();
+                }
+                else if (airJumpsLeft > 0)
+                {
+                    airJumpsLeft--;
+                    verticalSpeed = JumpSpeed();
+                }
             }
 
             verticalSpeed -= gravity * Time.deltaTime;
@@ -99,10 +125,22 @@ namespace TheSpaceBetween
         }
 
         //==================== PUBLIC API =====================
+        /// <summary>Gives one extra jump that works in mid-air. Landing removes it if unused.</summary>
+        public void GrantAirJump()
+        {
+            airJumpsLeft = 1;
+            treatAsAirborneThisFrame = true;
+        }
+
         /// <summary>Removes the vertical speed, called after a swap so no momentum carries over.</summary>
         public void ResetMotion()
         {
             verticalSpeed = 0f;
+        }
+
+        private float JumpSpeed()
+        {
+            return Mathf.Sqrt(2f * gravity * jumpHeight);
         }
     }
 }
