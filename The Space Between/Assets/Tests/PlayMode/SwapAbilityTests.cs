@@ -18,6 +18,7 @@ namespace TheSpaceBetween.Tests
             body.useGravity = false;
 
             SwapAbility ability = go.AddComponent<SwapAbility>();
+            SetField(ability, "aimMode", SwapAimMode.Nearest);
             if (glassDoesNotBlock)
             {
                 SetField(ability, "sightBlockers", (LayerMask)~(1 << GlassLayer));
@@ -207,6 +208,7 @@ namespace TheSpaceBetween.Tests
             controller.height = 2f;
             controller.radius = 0.5f;
             SwapAbility player = go.AddComponent<SwapAbility>();
+            SetField(player, "aimMode", SwapAimMode.Nearest);
             go.SetActive(true);
 
             Swappable crate = CreateTarget(new Vector3(5f, 0.5f, 0f));

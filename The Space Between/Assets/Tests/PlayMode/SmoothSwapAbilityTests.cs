@@ -25,6 +25,7 @@ namespace TheSpaceBetween.Tests
             go.SetActive(false);
             go.AddComponent<AirJumpRecorder>();
             SmoothSwapAbility ability = go.AddComponent<SmoothSwapAbility>();
+            SetField(ability, "aimMode", SwapAimMode.Nearest);
             go.SetActive(true);
             Physics.SyncTransforms();
             return ability;
@@ -181,6 +182,7 @@ namespace TheSpaceBetween.Tests
             capsule.height = 2f;
             capsule.radius = 0.5f;
             SmoothSwapAbility player = go.AddComponent<SmoothSwapAbility>();
+            SetField(player, "aimMode", SwapAimMode.Nearest);
             go.SetActive(true);
 
             Swappable crate = CreateTarget(new Vector3(5f, 0.5f, 0f));

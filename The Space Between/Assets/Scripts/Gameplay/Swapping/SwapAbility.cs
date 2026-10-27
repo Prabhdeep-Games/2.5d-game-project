@@ -6,9 +6,18 @@ using UnityEngine.InputSystem;
 namespace TheSpaceBetween
 {
     /// <summary>
-    /// Lets this object swap positions with the nearest valid Swappable in range.
+    /// Lets this object swap positions with the Swappable it is aiming at.
     ///
-    /// Rules, checked in this order for each candidate (nearest first):
+    /// Choosing the target (see SwapAimMode):
+    ///   Pointer  A thick ray is cast from this object along the aim direction (mouse cursor or
+    ///            right stick). The first Swappable the ray reaches is the target. If something
+    ///            solid in the Sight Blockers layers is reached first, there is no target.
+    ///   Facing   The same ray, aimed left or right to match the way the player last moved.
+    ///   Nearest  The old behaviour: the nearest valid Swappable in any direction.
+    /// The aimed target is never replaced by an object behind it. If it is rejected, the swap is
+    /// rejected and the reason is reported.
+    ///
+    /// Rules checked for the aimed target:
     ///   1. The target is within range.
     ///   2. The target is not locked.
     ///   3. Nothing in the Sight Blockers layers lies between the two. Leave glass layers out of
@@ -16,8 +25,6 @@ namespace TheSpaceBetween
     ///   4. Both bodies fit at their new positions without overlapping solid geometry.
     /// Bodies trade standing points (the middle of the bottom of each body), so a tall player and
     /// a short crate both keep their feet at the other's floor level.
-    /// The first candidate that passes everything is swapped. If none passes, nothing changes and
-    /// the reason of the nearest candidate is reported.
     ///
     /// Both bodies lose all momentum when they swap.
     /// </summary>
@@ -26,11 +33,32 @@ namespace TheSpaceBetween
     {
         private const int MaxCandidates = 32;
         private const float ClearanceSkin = 0.02f;
+        private const float PointerMovedThreshold = 1f;
 
         //==================== INPUT =====================
         [Header("Input")]
         [Tooltip("Pressing this action attempts a swap.")]
         [SerializeField] private InputAction swapAction = new InputAction("Swap", InputActionType.Button);
+
+        [Tooltip("Aim direction from a stick. Pointer mode only.")]
+        [SerializeField] private InputAction aimStickAction = new InputAction("Aim Stick", InputActionType.Value);
+
+        [Tooltip("Screen position of the mouse cursor. Pointer mode only.")]
+        [SerializeField] private InputAction pointerAction = new InputAction("Pointer", InputActionType.Value);
+
+        //==================== TARGETING =====================
+        [Header("Targeting")]
+        [Tooltip("How the target is chosen. Pointer: mouse or right stick. Facing: the way the player last moved. Nearest: old behaviour, nearest object in any direction.")]
+        [SerializeField] private SwapAimMode aimMode = SwapAimMode.Pointer;
+
+        [Tooltip("Thickness of the aim ray in world units. A thicker ray is more forgiving, a thin one needs a precise aim.")]
+        [SerializeField, Min(0.05f)] private float aimRadius = 0.35f;
+
+        [Tooltip("How far the stick must be pushed before it counts as aiming.")]
+        [SerializeField, Range(0.1f, 0.9f)] private float stickDeadZone = 0.3f;
+
+        [Tooltip("Camera used to turn the cursor into a world position. Empty means the main camera.")]
+        [SerializeField] private Camera aimCamera;
 
         //==================== RULES =====================
         [Header("Rules")]
@@ -59,16 +87,29 @@ namespace TheSpaceBetween
         [Tooltip("Write the result of every swap attempt to the Console.")]
         [SerializeField] private bool logAttempts;
 
-        [Tooltip("Draw the range and a line to the nearest candidate when selected.")]
+        [Tooltip("Draw the range, the aim ray and the current target when selected.")]
         [SerializeField] private bool drawGizmos = true;
 
         [Tooltip("Result of the most recent attempt.")]
         [ReadOnly, SerializeField] private SwapRejection lastResult;
 
+        [Tooltip("The object currently aimed at. Empty when nothing is aimed at.")]
+        [ReadOnly, SerializeField] private Swappable currentTarget;
+
+        [Tooltip("Whether the current target could be swapped with right now. None means yes.")]
+        [ReadOnly, SerializeField] private SwapRejection currentStatus;
+
         protected Swappable self;
+        private IFacingSource facingSource;
+        private Vector3 aimDirection = Vector3.right;
+        private Vector3 aimEnd;
+        private Vector2 lastPointer;
+        private bool stickWasLastUsed;
+
         private readonly Collider[] candidateBuffer = new Collider[MaxCandidates];
         private readonly Collider[] clearanceBuffer = new Collider[MaxCandidates];
         private readonly Swappable[] candidates = new Swappable[MaxCandidates];
+        private readonly RaycastHit[] castBuffer = new RaycastHit[MaxCandidates];
 
         //==================== OUTPUTS =====================
         /// <summary>Raised after a successful swap. The argument is the object swapped with.</summary>
@@ -81,35 +122,76 @@ namespace TheSpaceBetween
 
         public float Range => range;
 
+        /// <summary>The object currently aimed at, or null. Always null while a swap is playing.</summary>
+        public Swappable Target => IsSwapping ? null : currentTarget;
+
+        /// <summary>Whether the current target could be swapped with. None means the swap would work.</summary>
+        public SwapRejection TargetStatus => currentStatus;
+
+        /// <summary>Unit vector of the current aim in the world. Not used in Nearest mode.</summary>
+        public Vector3 AimDirection => aimDirection;
+
+        /// <summary>Where the aim ray ends: the target, the solid thing that stopped it, or the end of the range.</summary>
+        public Vector3 AimEndPoint => aimEnd;
+
+        /// <summary>The point the aim starts from, the middle of this body.</summary>
+        public Vector3 Origin => self != null ? self.Center : transform.position;
+
         //==================== LIFECYCLE =====================
         private void Reset()
         {
             swapAction = new InputAction("Swap", InputActionType.Button, "<Keyboard>/e");
             swapAction.AddBinding("<Gamepad>/buttonWest");
+
+            aimStickAction = new InputAction("Aim Stick", InputActionType.Value, "<Gamepad>/rightStick");
+            pointerAction = new InputAction("Pointer", InputActionType.Value, "<Mouse>/position");
         }
 
         protected virtual void Awake()
         {
             self = GetComponent<Swappable>();
+            facingSource = GetComponent<IFacingSource>();
         }
 
         protected virtual void OnEnable()
         {
             swapAction.performed += OnSwapPerformed;
             swapAction.Enable();
+            aimStickAction.Enable();
+            pointerAction.Enable();
         }
 
         protected virtual void OnDisable()
         {
             swapAction.performed -= OnSwapPerformed;
             swapAction.Disable();
+            aimStickAction.Disable();
+            pointerAction.Disable();
+        }
+
+        protected virtual void Update()
+        {
+            if (!IsSwapping)
+            {
+                RefreshTargeting();
+            }
         }
 
         //==================== PUBLIC API =====================
         /// <summary>True while a swap is still playing out. New attempts are ignored until it ends.</summary>
         public virtual bool IsSwapping => false;
 
-        /// <summary>Attempts a swap with the nearest valid target. Returns true when a swap was accepted.</summary>
+        /// <summary>Sets the aim direction by hand. Pointer mode overwrites it as soon as the mouse or stick moves.</summary>
+        public void SetAimDirection(Vector3 direction)
+        {
+            direction.z = 0f;
+            if (direction.sqrMagnitude > 0.0001f)
+            {
+                aimDirection = direction.normalized;
+            }
+        }
+
+        /// <summary>Attempts a swap with the aimed target. Returns true when a swap was accepted.</summary>
         public bool TrySwap()
         {
             if (IsSwapping)
@@ -117,35 +199,177 @@ namespace TheSpaceBetween
                 return false;
             }
 
-            int count = GatherCandidates();
-            if (count == 0)
+            RefreshTargeting();
+
+            if (currentTarget == null || currentStatus != SwapRejection.None)
             {
-                return Finish(SwapRejection.NoTargetInRange, null);
+                return Finish(currentStatus, null);
             }
 
-            SwapRejection nearestReason = SwapRejection.None;
-            for (int i = 0; i < count; i++)
-            {
-                SwapRejection reason = Evaluate(candidates[i]);
-                if (reason == SwapRejection.None)
-                {
-                    Execute(candidates[i]);
-                    return Finish(SwapRejection.None, candidates[i]);
-                }
-
-                if (i == 0)
-                {
-                    nearestReason = reason;
-                }
-            }
-
-            return Finish(nearestReason, null);
+            Swappable chosen = currentTarget;
+            Execute(chosen);
+            return Finish(SwapRejection.None, chosen);
         }
 
-        //==================== PRIVATE =====================
+        //==================== TARGETING =====================
         private void OnSwapPerformed(InputAction.CallbackContext context)
         {
             TrySwap();
+        }
+
+        // Works out the aim and the target from the current state of the world.
+        private void RefreshTargeting()
+        {
+            if (self == null)
+            {
+                return;
+            }
+
+            if (aimMode == SwapAimMode.Nearest)
+            {
+                ResolveNearest();
+                return;
+            }
+
+            UpdateAimDirection();
+            ResolveAimed();
+        }
+
+        private void UpdateAimDirection()
+        {
+            if (aimMode == SwapAimMode.Facing)
+            {
+                SetAimDirection(facingSource != null ? facingSource.Facing : Vector3.right);
+                return;
+            }
+
+            Vector2 stick = aimStickAction.ReadValue<Vector2>();
+            if (stick.magnitude >= stickDeadZone)
+            {
+                SetAimDirection(new Vector3(stick.x, stick.y, 0f));
+                stickWasLastUsed = true;
+                return;
+            }
+
+            // With no stick input, the cursor sets the aim. If the player used the stick last and
+            // the cursor has not moved, the stick's aim is kept.
+            Vector2 pointer = pointerAction.ReadValue<Vector2>();
+            bool pointerMoved = (pointer - lastPointer).sqrMagnitude > PointerMovedThreshold;
+            lastPointer = pointer;
+
+            if (stickWasLastUsed && !pointerMoved)
+            {
+                return;
+            }
+
+            Camera cam = aimCamera != null ? aimCamera : Camera.main;
+            if (cam == null)
+            {
+                return;
+            }
+
+            stickWasLastUsed = false;
+            Vector3 origin = self.Center;
+            Plane gamePlane = new Plane(Vector3.forward, origin);
+            Ray ray = cam.ScreenPointToRay(pointer);
+            if (gamePlane.Raycast(ray, out float distance))
+            {
+                SetAimDirection(ray.GetPoint(distance) - origin);
+            }
+        }
+
+        // Casts along the aim direction and picks the first Swappable the cast reaches.
+        private void ResolveAimed()
+        {
+            Vector3 origin = self.Center;
+            aimEnd = origin + aimDirection * range;
+            currentTarget = null;
+            currentStatus = SwapRejection.NoTargetInRange;
+
+            LayerMask castMask = swappableLayers | sightBlockers;
+            int hits = Physics.SphereCastNonAlloc(origin, aimRadius, aimDirection, castBuffer, range, castMask, QueryTriggerInteraction.Ignore);
+            SortHitsByDistance(hits);
+
+            for (int i = 0; i < hits; i++)
+            {
+                Collider hitCollider = castBuffer[i].collider;
+                Swappable owner = hitCollider.GetComponentInParent<Swappable>();
+
+                if (owner == self)
+                {
+                    continue;
+                }
+
+                if (owner != null)
+                {
+                    if (Vector3.Distance(origin, owner.Center) > range)
+                    {
+                        return;
+                    }
+
+                    currentTarget = owner;
+                    currentStatus = Evaluate(owner);
+                    aimEnd = owner.Center;
+                    return;
+                }
+
+                // A solid thing that is not swappable ends the aim, unless it is something like glass.
+                if (IsInMask(sightBlockers, hitCollider.gameObject.layer))
+                {
+                    currentStatus = SwapRejection.LineOfSightBlocked;
+                    aimEnd = castBuffer[i].point;
+                    return;
+                }
+            }
+        }
+
+        private void SortHitsByDistance(int count)
+        {
+            for (int i = 1; i < count; i++)
+            {
+                RaycastHit item = castBuffer[i];
+                int j = i - 1;
+                while (j >= 0 && castBuffer[j].distance > item.distance)
+                {
+                    castBuffer[j + 1] = castBuffer[j];
+                    j--;
+                }
+
+                castBuffer[j + 1] = item;
+            }
+        }
+
+        private static bool IsInMask(LayerMask mask, int layer)
+        {
+            return (mask.value & (1 << layer)) != 0;
+        }
+
+        // The old rule: the nearest valid target in any direction.
+        private void ResolveNearest()
+        {
+            currentTarget = null;
+            currentStatus = SwapRejection.NoTargetInRange;
+            aimEnd = self.Center;
+
+            int count = GatherCandidates();
+            for (int i = 0; i < count; i++)
+            {
+                SwapRejection reason = Evaluate(candidates[i]);
+                if (i == 0)
+                {
+                    currentTarget = candidates[i];
+                    currentStatus = reason;
+                    aimEnd = candidates[i].Center;
+                }
+
+                if (reason == SwapRejection.None)
+                {
+                    currentTarget = candidates[i];
+                    currentStatus = reason;
+                    aimEnd = candidates[i].Center;
+                    return;
+                }
+            }
         }
 
         // Fills the candidates array, nearest first, and returns how many were found.
@@ -202,6 +426,7 @@ namespace TheSpaceBetween
             return false;
         }
 
+        //==================== RULES =====================
         private SwapRejection Evaluate(Swappable target)
         {
             if (!target.CanSwap || !self.CanSwap)
@@ -346,6 +571,16 @@ namespace TheSpaceBetween
 
             Gizmos.color = new Color(0.2f, 0.8f, 1f, 0.6f);
             Gizmos.DrawWireSphere(center, range);
+
+            if (!Application.isPlaying)
+            {
+                return;
+            }
+
+            // The aim ray: green when the target is valid, red when rejected, grey with no target.
+            Gizmos.color = currentTarget == null ? Color.gray : currentStatus == SwapRejection.None ? Color.green : Color.red;
+            Gizmos.DrawLine(center, aimEnd);
+            Gizmos.DrawWireSphere(aimEnd, aimRadius);
         }
     }
 }
