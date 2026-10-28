@@ -37,7 +37,7 @@ namespace TheSpaceBetween
 
         //==================== INPUT =====================
         [Header("Input")]
-        [Tooltip("Pressing this action attempts a swap.")]
+        [Tooltip("Pressing this action attempts a swap. Reads the left mouse button and the gamepad west button.")]
         [SerializeField] private InputAction swapAction = new InputAction("Swap", InputActionType.Button);
 
         [Tooltip("Aim direction from a stick. Pointer mode only.")]
@@ -140,7 +140,7 @@ namespace TheSpaceBetween
         //==================== LIFECYCLE =====================
         private void Reset()
         {
-            swapAction = new InputAction("Swap", InputActionType.Button, "<Keyboard>/e");
+            swapAction = new InputAction("Swap", InputActionType.Button, "<Mouse>/leftButton");
             swapAction.AddBinding("<Gamepad>/buttonWest");
 
             aimStickAction = new InputAction("Aim Stick", InputActionType.Value, "<Gamepad>/rightStick");

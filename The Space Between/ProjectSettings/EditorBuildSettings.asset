@@ -15,9 +15,6 @@ EditorBuildSettings:
     path: Assets/Scenes/Test_Room.unity
     guid: fec33d86e4fb81044933de42cd4ee40e
   - enabled: 1
-    path: Assets/Scenes/Test_Room_Facing.unity
-    guid: 91b6cb1228aae5f48a14d7a0255671f9
-  - enabled: 1
     path: Assets/Scenes/Wall_Run_Test.unity
     guid: 615c98d88ed4a57468e9c7a5ac118c66
   m_configObjects:

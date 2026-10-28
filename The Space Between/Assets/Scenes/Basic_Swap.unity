@@ -261,7 +261,7 @@ MonoBehaviour:
     m_SingletonActionBindings:
     - m_Name: 
       m_Id: d8f8d3ab-8a0a-4c87-acc0-73a90cd9d852
-      m_Path: <Keyboard>/e
+      m_Path: <Mouse>/leftButton
       m_Interactions: 
       m_Processors: 
       m_Groups: 
@@ -476,12 +476,34 @@ MonoBehaviour:
       m_Action: Jump
       m_Flags: 0
     m_Flags: 0
+  runAction:
+    m_Name: Run
+    m_Type: 1
+    m_ExpectedControlType: 
+    m_Id: 7ced9511-6f8e-4fae-9055-5a5f1662eeba
+    m_Processors: 
+    m_Interactions: 
+    m_SingletonActionBindings: []
+    m_Flags: 0
   moveSpeed: 6
+  runSpeed: 10
   jumpHeight: 1.8
   gravity: 25
+  wallRunEnabled: 1
+  maxWallRunSurfaceAngle: 100
+  wallSlideSpeed: 2
+  wallJumpAwaySpeed: 9
+  body: {fileID: 0}
+  bodyTurnSpeed: 14
+  drawGizmos: 1
+  logWallJumps: 0
   isGrounded: 0
+  isRunning: 0
+  isWallRunning: 0
+  surfaceSpeed: 0
   verticalSpeed: 0
   airJumpsLeft: 0
+  lastWallJump: none yet
 --- !u!114 &211780668
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1103,6 +1125,7 @@ GameObject:
   - component: {fileID: 1477801959}
   - component: {fileID: 1477801958}
   - component: {fileID: 1477801957}
+  - component: {fileID: 1477801961}
   m_Layer: 0
   m_Name: CM Follow Camera
   m_TagString: Untagged
@@ -1214,6 +1237,36 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1477801961
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1477801956}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ca7de3aefa901374ba29464584a3109a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineDecollider
+  CameraRadius: 0.4
+  Decollision:
+    Enabled: 1
+    ObstacleLayers:
+      serializedVersion: 2
+      m_Bits: 4294967259
+    UseFollowTarget:
+      Enabled: 0
+      YOffset: 0
+    Damping: 0.5
+    SmoothingTime: 0
+  TerrainResolution:
+    Enabled: 1
+    TerrainLayers:
+      serializedVersion: 2
+      m_Bits: 4294967259
+    MaximumRaycast: 10
+    Damping: 0.5
 --- !u!1 &1946205301
 GameObject:
   m_ObjectHideFlags: 0
