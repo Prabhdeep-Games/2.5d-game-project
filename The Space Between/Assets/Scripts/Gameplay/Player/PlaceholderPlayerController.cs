@@ -15,7 +15,8 @@ namespace TheSpaceBetween
     /// along it at Run Speed; letting go of run or of the movement keys slides slowly down. Jump is the way off: it launches away from the surface, and
     /// movement keys are ignored until the jump ends. If the player's capsule touches another marked surface
     /// during that jump, the wall run continues on it; otherwise the player falls. Landing on a marked steep
-    /// surface without running slides the player down it.
+    /// surface without running slides the player down it. Running into a ceiling ends the run and the player drops.
+    /// A swap that moves the player ends a wall jump in progress and gives the movement keys back.
     /// A plain steep surface without the component is just a wall.
     ///
     /// It reads its own input actions, so no Player Input component is needed on the player.
@@ -38,6 +39,8 @@ namespace TheSpaceBetween
         private const float MinSlideNormalY = 0.05f;            // A surface must face at least this much upward to be slid down.
         private const float CarriedMomentumDecay = 6f;          // How fast speed left over from a wall run fades, per second.
         private const float WallJumpScanDistance = 20f;         // How far ahead the debug scan looks for an opposite wall.
+        private const float CeilingProbeDistance = 0.2f;        // How far above the head a ceiling is looked for.
+        private const float MinCeilingNormalY = 0.5f;           // A ceiling must face at least this much downward.
 
         //==================== INPUT =====================
         [Header("Input")]
@@ -122,6 +125,7 @@ namespace TheSpaceBetween
         private CharacterController controller;
         private Swappable swappable;
         private bool treatAsAirborneThisFrame;
+        private bool wasFrozen;
         private float facingSign = 1f;
 
         private Vector3 approachVelocity;
@@ -224,7 +228,14 @@ namespace TheSpaceBetween
             // A swap in progress holds the player still, so input is ignored until it ends.
             if (swappable != null && swappable.IsFrozen)
             {
+                wasFrozen = true;
                 return;
+            }
+
+            if (wasFrozen)
+            {
+                wasFrozen = false;
+                OnMovedBySwap();
             }
 
             float input = moveAction.ReadValue<float>();
@@ -467,7 +478,25 @@ namespace TheSpaceBetween
             float stick = Mathf.Min(gap / Time.deltaTime, StickSpeed);
 
             Vector3 velocity = AlongSurface() * surfaceSpeed - wallNormal * stick;
-            controller.Move(velocity * Time.deltaTime);
+            CollisionFlags flags = controller.Move(velocity * Time.deltaTime);
+
+            // Running into a ceiling ends the run like a jump that hits its head, so the player drops
+            // instead of being held against it.
+            if (surfaceSpeed > 0f && (flags & CollisionFlags.Above) != 0 && CeilingOverhead())
+            {
+                surfaceSpeed = 0f;
+                EndWallRun(input);
+            }
+        }
+
+        // True when something facing down, and not itself a surface that can be run on, is right above the head.
+        private bool CeilingOverhead()
+        {
+            Vector3 center = transform.position + controller.center;
+            float reach = controller.height * 0.5f + controller.skinWidth + CeilingProbeDistance;
+            return Physics.Raycast(center, Vector3.up, out RaycastHit hit, reach, ~0, QueryTriggerInteraction.Ignore)
+                   && hit.normal.y < -MinCeilingNormalY
+                   && !IsRunnable(hit.collider, hit.normal);
         }
 
         // The controller's own grounded flag also fires on steep slopes, so the ground below is checked directly.
@@ -584,6 +613,20 @@ namespace TheSpaceBetween
             float lift = Mathf.Max(reach - surfaceDistance, 0f) * attachWeight;
 
             body.SetPositionAndRotation(transform.position + controller.center + wallNormal * lift, tilt);
+        }
+
+        // A smooth swap keeps momentum, but the player is now somewhere else. A wall jump was heading for a wall
+        // near the old position, so it ends here; its sideways speed is kept and fades out under normal control.
+        private void OnMovedBySwap()
+        {
+            if (!inWallJump)
+            {
+                return;
+            }
+
+            inWallJump = false;
+            carriedX = wallJumpVelocityX;
+            ReportWallJump("ended by a swap");
         }
 
         //==================== PUBLIC API =====================

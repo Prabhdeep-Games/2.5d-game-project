@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace TheSpaceBetween
@@ -22,6 +23,8 @@ namespace TheSpaceBetween
         [Tooltip("Draw the measured swap bounds when this object is selected.")]
         [SerializeField] private bool drawBounds = true;
 
+        private static readonly List<Swappable> active = new List<Swappable>();
+
         private Collider[] colliders;
         private Rigidbody body;
         private CharacterController characterController;
@@ -33,6 +36,9 @@ namespace TheSpaceBetween
         private Vector3 frozenAngularVelocity;
 
         //==================== OUTPUTS =====================
+        /// <summary>Every enabled Swappable in the loaded scenes, for feedback that needs to know what can be swapped.</summary>
+        public static IReadOnlyList<Swappable> Active => active;
+
         public bool CanSwap
         {
             get => canSwap;
@@ -196,6 +202,16 @@ namespace TheSpaceBetween
         private void Awake()
         {
             CacheComponents();
+        }
+
+        private void OnEnable()
+        {
+            active.Add(this);
+        }
+
+        private void OnDisable()
+        {
+            active.Remove(this);
         }
 
         //==================== PRIVATE =====================

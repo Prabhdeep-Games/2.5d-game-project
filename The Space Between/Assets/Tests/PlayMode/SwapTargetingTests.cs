@@ -141,6 +141,21 @@ namespace TheSpaceBetween.Tests
         }
 
         [Test]
+        public void CrateOnALedgeEdge_CanBeAimedAtFromBelow_WhenTheCentreLineClearsTheCorner()
+        {
+            // The aim passes 0.3 units above the ledge corner: inside the aim's thickness, but a clear view.
+            SwapAbility player = CreatePlayer();
+            CreateSolid(new Vector3(7f, -2f, 0f), new Vector3(6f, 6f, 5f));
+            Swappable crate = CreateTarget(new Vector3(4.5f, 1.5f, 0f), "On the ledge edge");
+            player.SetAimDirection(crate.Center - player.transform.position);
+
+            bool swapped = player.TrySwap();
+
+            Assert.IsTrue(swapped, SwapRejectionText.Describe(player.LastResult));
+            Assert.AreEqual(new Vector3(4.5f, 1.5f, 0f), player.transform.position);
+        }
+
+        [Test]
         public void AimingAwayFromEveryObject_MeansNoTarget()
         {
             SwapAbility player = CreatePlayer();

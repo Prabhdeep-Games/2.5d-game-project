@@ -11,7 +11,8 @@ namespace TheSpaceBetween
     /// Choosing the target (see SwapAimMode):
     ///   Pointer  A thick ray is cast from this object along the aim direction (mouse cursor or
     ///            right stick). The first Swappable the ray reaches is the target. If something
-    ///            solid in the Sight Blockers layers is reached first, there is no target.
+    ///            solid in the Sight Blockers layers lies on the ray's centre line first, there is
+    ///            no target. The thickness only makes objects easier to hit, never walls.
     ///   Facing   The same ray, aimed left or right to match the way the player last moved.
     ///   Nearest  The old behaviour: the nearest valid Swappable in any direction.
     /// The aimed target is never replaced by an object behind it. If it is rejected, the swap is
@@ -51,7 +52,7 @@ namespace TheSpaceBetween
         [Tooltip("How the target is chosen. Pointer: mouse or right stick. Facing: the way the player last moved. Nearest: old behaviour, nearest object in any direction.")]
         [SerializeField] private SwapAimMode aimMode = SwapAimMode.Pointer;
 
-        [Tooltip("Thickness of the aim ray in world units. A thicker ray is more forgiving, a thin one needs a precise aim.")]
+        [Tooltip("Thickness of the aim ray in world units, for hitting swappable objects. A thicker ray is more forgiving, a thin one needs a precise aim. Walls block along the ray's centre line only.")]
         [SerializeField, Min(0.05f)] private float aimRadius = 0.35f;
 
         [Tooltip("How far the stick must be pushed before it counts as aiming.")]
@@ -286,41 +287,64 @@ namespace TheSpaceBetween
             currentTarget = null;
             currentStatus = SwapRejection.NoTargetInRange;
 
-            LayerMask castMask = swappableLayers | sightBlockers;
-            int hits = Physics.SphereCastNonAlloc(origin, aimRadius, aimDirection, castBuffer, range, castMask, QueryTriggerInteraction.Ignore);
+            // Solid things end the aim along its centre line, the same line the sight rule checks. The thickness
+            // only makes objects easier to hit; if it also counted for walls, a ledge corner that the centre line
+            // clears would hide a crate standing on that ledge from every position below it.
+            float blockedAt = DistanceToSightBlocker(origin, out Vector3 blockedPoint);
+
+            int hits = Physics.SphereCastNonAlloc(origin, aimRadius, aimDirection, castBuffer, range, swappableLayers, QueryTriggerInteraction.Ignore);
             SortHitsByDistance(hits);
 
             for (int i = 0; i < hits; i++)
             {
-                Collider hitCollider = castBuffer[i].collider;
-                Swappable owner = hitCollider.GetComponentInParent<Swappable>();
-
-                if (owner == self)
+                Swappable owner = castBuffer[i].collider.GetComponentInParent<Swappable>();
+                if (owner == null || owner == self)
                 {
                     continue;
                 }
 
-                if (owner != null)
+                if (castBuffer[i].distance > blockedAt)
                 {
-                    if (Vector3.Distance(origin, owner.Center) > range)
-                    {
-                        return;
-                    }
+                    break;
+                }
 
-                    currentTarget = owner;
-                    currentStatus = Evaluate(owner);
-                    aimEnd = owner.Center;
+                if (Vector3.Distance(origin, owner.Center) > range)
+                {
                     return;
                 }
 
-                // A solid thing that is not swappable ends the aim, unless it is something like glass.
-                if (IsInMask(sightBlockers, hitCollider.gameObject.layer))
-                {
-                    currentStatus = SwapRejection.LineOfSightBlocked;
-                    aimEnd = castBuffer[i].point;
-                    return;
-                }
+                currentTarget = owner;
+                currentStatus = Evaluate(owner);
+                aimEnd = owner.Center;
+                return;
             }
+
+            if (blockedAt < range)
+            {
+                currentStatus = SwapRejection.LineOfSightBlocked;
+                aimEnd = blockedPoint;
+            }
+        }
+
+        // How far along the aim's centre line the first solid, non swappable thing is. Glass is left out of the mask.
+        private float DistanceToSightBlocker(Vector3 origin, out Vector3 point)
+        {
+            point = origin + aimDirection * range;
+            int hits = Physics.RaycastNonAlloc(origin, aimDirection, castBuffer, range, sightBlockers, QueryTriggerInteraction.Ignore);
+            float nearest = range;
+
+            for (int i = 0; i < hits; i++)
+            {
+                if (castBuffer[i].distance >= nearest || castBuffer[i].collider.GetComponentInParent<Swappable>() != null)
+                {
+                    continue;
+                }
+
+                nearest = castBuffer[i].distance;
+                point = castBuffer[i].point;
+            }
+
+            return nearest;
         }
 
         private void SortHitsByDistance(int count)
@@ -337,11 +361,6 @@ namespace TheSpaceBetween
 
                 castBuffer[j + 1] = item;
             }
-        }
-
-        private static bool IsInMask(LayerMask mask, int layer)
-        {
-            return (mask.value & (1 << layer)) != 0;
         }
 
         // The old rule: the nearest valid target in any direction.
