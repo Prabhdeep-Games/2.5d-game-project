@@ -98,6 +98,10 @@ namespace TheSpaceBetween.Tests
             cc.enabled = true;
             Physics.SyncTransforms();
 
+            // The player starts at the traversal route, far from these stations, so the camera is snapped to the
+            // new position instead of being left to pan across the whole scene.
+            framing.GetComponent<CinemachineCamera>().PreviousStateIsValid = false;
+
             float settle = Time.time + 0.2f;
             while (Time.time < settle)
             {
@@ -422,9 +426,10 @@ namespace TheSpaceBetween.Tests
         {
             yield return LoadScene(BeforeCurve6X);
 
-            // The wall can be resized in the scene, so its top is read from its collider rather than assumed.
-            GameObject wall = GameObject.Find("Vertical Wall (marked)");
-            Assert.NotNull(wall, "Wall_Run_Test needs the Vertical Wall (marked) above the radius 6 curve.");
+            // The curve continues straight up into its vertical wall in one mesh. Its top is read from the collider,
+            // because the straight length can be changed in the scene.
+            GameObject wall = GameObject.Find("Curved Wall R6");
+            Assert.NotNull(wall, "Wall_Run_Test needs the radius 6 Curved Wall with its vertical section.");
             float wallTopY = wall.GetComponent<Collider>().bounds.max.y;
 
             yield return Hold(keyboard.dKey, run: true);
