@@ -17,7 +17,7 @@ namespace TheSpaceBetween
         [Header("Rules")]
         [Tooltip("Whether this object may be swapped right now. Turn it off from a puzzle to lock the object in place.")]
         [SerializeField] private bool canSwap = true;
-
+        
         //==================== DEBUG =====================
         [Header("Debug")]
         [Tooltip("Draw the measured swap bounds when this object is selected.")]
