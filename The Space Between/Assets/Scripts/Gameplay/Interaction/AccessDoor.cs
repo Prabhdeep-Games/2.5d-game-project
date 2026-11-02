@@ -4,14 +4,18 @@ using UnityEngine.Events;
 namespace TheSpaceBetween
 {
     /// <summary>
-    /// A door that controls access. While locked it refuses to open, and it tells the world
+    /// A sealed door that controls access. While locked it refuses to open, and it tells the world
     /// that it refused. Once unlocked it slides to its open position, which physically clears
     /// the way because the door keeps its collider.
     ///
-    /// The door does not decide who may unlock it. A key pickup, a switch, or a puzzle raises
-    /// the GameEvent assigned as the unlock event, or calls Unlock directly.
+    /// The door does not decide who may unlock it. A control panel powers it (powered means unlocked),
+    /// a puzzle raises the GameEvent assigned as the unlock event, or a script calls Unlock directly.
+    /// A security camera can put it in lockdown: it then closes and refuses to open, even when unlocked,
+    /// until the camera releases it. If Opens When Unlocked is on, it opens again by itself.
+    ///
+    /// The door never closes onto the player or a crate: it waits until the way is clear.
     /// </summary>
-    public class AccessDoor : MonoBehaviour
+    public class AccessDoor : Mechanism
     {
         /// <summary>Where the door is in its movement between closed and open.</summary>
         public enum DoorState
@@ -26,14 +30,17 @@ namespace TheSpaceBetween
 
         //==================== ACCESS =====================
         [Header("Access")]
-        [Tooltip("Whether the door starts locked. A locked door refuses to open until Unlock is called.")]
+        [Tooltip("Whether the door starts locked. A locked door refuses to open until Unlock is called or a panel powers it.")]
         [SerializeField] private bool startsLocked = true;
 
         [Tooltip("Optional event that unlocks this door when raised, for example when the player picks up a key.")]
         [SerializeField] private GameEvent unlockEvent;
 
-        [Tooltip("Open the door as soon as it is unlocked.")]
+        [Tooltip("Open the door as soon as it is unlocked, and again when a lockdown ends.")]
         [SerializeField] private bool opensWhenUnlocked = true;
+
+        [Tooltip("Start in the open position. Only used when the door starts unlocked, for example a door a security camera seals.")]
+        [SerializeField] private bool startsOpen;
 
         //==================== MOVEMENT =====================
         [Header("Movement")]
@@ -51,60 +58,50 @@ namespace TheSpaceBetween
         [Tooltip("Invoked when the door finishes closing.")]
         [SerializeField] private UnityEvent closedEvent;
 
-        [Tooltip("Invoked when something tried to open the door while it was locked. Use it for a denied sound or light.")]
+        [Tooltip("Invoked when something tried to open the door while it was locked or locked down. Use it for a denied sound or light.")]
         [SerializeField] private UnityEvent openRejectedEvent;
 
         //==================== DEBUG =====================
-        [Header("Debug")]
-        [Tooltip("Write door messages to the Console, including why an open request was refused.")]
-        [SerializeField] private bool logChanges;
-
-        [Tooltip("Whether the door is locked right now.")]
-        [ReadOnly, SerializeField] private bool isLocked;
-
+        [Header("Door State")]
         [Tooltip("Current movement state of the door.")]
         [ReadOnly, SerializeField] private DoorState state = DoorState.Closed;
+
+        [Tooltip("Whether the door is waiting because something is standing where it would close.")]
+        [ReadOnly, SerializeField] private bool isObstructed;
 
         private Vector3 closedLocalPosition;
         private Vector3 openLocalPosition;
         private float speed;
+        private Collider doorCollider;
 
         //==================== PUBLIC API =====================
-        public bool IsLocked => isLocked;
+        /// <summary>Locked means unpowered. A door in lockdown is not locked, but still refuses to open.</summary>
+        public bool IsLocked => !IsPowered;
 
         public DoorState State => state;
+
+        /// <summary>True while the door waits for something to leave the doorway before closing.</summary>
+        public bool IsObstructed => isObstructed;
 
         /// <summary>Unlocks the door, and opens it when "Opens When Unlocked" is on.</summary>
         public void Unlock()
         {
-            if (!isLocked)
-            {
-                return;
-            }
-
-            isLocked = false;
-            Log("unlocked");
-
-            if (opensWhenUnlocked)
-            {
-                Open();
-            }
+            SetPowered(true);
         }
 
         /// <summary>Closes the door and locks it.</summary>
         public void Lock()
         {
             Close();
-            isLocked = true;
-            Log("locked");
+            SetPowered(false);
         }
 
-        /// <summary>Starts opening. A locked door refuses and raises the rejected event.</summary>
+        /// <summary>Starts opening. A locked or locked down door refuses and raises the rejected event.</summary>
         public void Open()
         {
-            if (isLocked)
+            if (!IsActive)
             {
-                Log("refused to open because it is locked");
+                Log(IsLockedDown ? "refused to open because it is in lockdown" : "refused to open because it is locked");
                 openRejectedEvent?.Invoke();
                 return;
             }
@@ -130,13 +127,41 @@ namespace TheSpaceBetween
             Log("closing");
         }
 
-        //==================== LIFECYCLE =====================
-        private void Awake()
+        //==================== MECHANISM =====================
+        protected override bool StartsPowered => !startsLocked;
+
+        protected override void OnActiveChanged(bool active)
         {
+            if (!active)
+            {
+                Close();
+                return;
+            }
+
+            if (opensWhenUnlocked)
+            {
+                Open();
+            }
+            else
+            {
+                Log("unlocked");
+            }
+        }
+
+        //==================== LIFECYCLE =====================
+        protected override void Awake()
+        {
+            base.Awake();
             closedLocalPosition = transform.localPosition;
             openLocalPosition = closedLocalPosition + openOffset;
             speed = openOffset.magnitude / travelTime;
-            isLocked = startsLocked;
+            doorCollider = GetComponent<Collider>();
+
+            if (startsOpen && !startsLocked)
+            {
+                transform.localPosition = openLocalPosition;
+                state = DoorState.Open;
+            }
         }
 
         private void OnEnable()
@@ -147,8 +172,9 @@ namespace TheSpaceBetween
             }
         }
 
-        private void OnDisable()
+        protected override void OnDisable()
         {
+            base.OnDisable();
             if (unlockEvent != null)
             {
                 unlockEvent.Raised -= Unlock;
@@ -157,6 +183,7 @@ namespace TheSpaceBetween
 
         private void Update()
         {
+            isObstructed = false;
             if (state != DoorState.Opening && state != DoorState.Closing)
             {
                 return;
@@ -164,8 +191,28 @@ namespace TheSpaceBetween
 
             bool opening = state == DoorState.Opening;
             Vector3 target = opening ? openLocalPosition : closedLocalPosition;
+            Vector3 next = Vector3.MoveTowards(transform.localPosition, target, speed * Time.deltaTime);
 
-            transform.localPosition = Vector3.MoveTowards(transform.localPosition, target, speed * Time.deltaTime);
+            // A closing door waits rather than pushing into whoever stands in the doorway.
+            if (!opening)
+            {
+                Vector3 worldStep = transform.parent != null
+                    ? transform.parent.TransformVector(next - transform.localPosition)
+                    : next - transform.localPosition;
+                if (KinematicSafety.FindMovableInPath(doorCollider, worldStep) != null)
+                {
+                    isObstructed = true;
+                    return;
+                }
+            }
+
+            transform.localPosition = next;
+
+            // The doorway check reads the collider's bounds, which only follow the transform once physics is told.
+            if (doorCollider != null)
+            {
+                Physics.SyncTransforms();
+            }
 
             // A door with no offset has no distance to travel, so it finishes at once.
             bool arrived = speed <= 0f || (transform.localPosition - target).sqrMagnitude <= ArrivalDistanceSqr;
@@ -185,15 +232,6 @@ namespace TheSpaceBetween
             else
             {
                 closedEvent?.Invoke();
-            }
-        }
-
-        //==================== PRIVATE =====================
-        private void Log(string message)
-        {
-            if (logChanges)
-            {
-                Debug.Log($"[{nameof(AccessDoor)}] '{name}' {message}.", this);
             }
         }
 
