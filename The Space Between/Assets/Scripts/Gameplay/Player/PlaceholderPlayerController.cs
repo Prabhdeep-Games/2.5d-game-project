@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Serialization;
@@ -16,7 +17,11 @@ namespace TheSpaceBetween
     /// movement keys are ignored until the jump ends. If the player's capsule touches another marked surface
     /// during that jump, the wall run continues on it; otherwise the player falls. Landing on a marked steep
     /// surface without running slides the player down it. Running into a ceiling ends the run and the player drops.
-    /// A swap that moves the player ends a wall jump in progress and gives the movement keys back.
+    /// A swap that moves the player ends a wall jump in progress and gives the movement keys back. A wall run only
+    /// carries on after a swap when the new position is right against a surface that can be run on.
+    ///
+    /// Presentation (the Animator and particle effects) listens to the Jumped, WallJumped and Landed events and reads
+    /// the state properties. Nothing here waits for an animation, so movement never depends on presentation.
     /// A plain steep surface without the component is just a wall.
     ///
     /// It reads its own input actions, so no Player Input component is needed on the player.
@@ -41,6 +46,8 @@ namespace TheSpaceBetween
         private const float WallJumpScanDistance = 20f;         // How far ahead the debug scan looks for an opposite wall.
         private const float CeilingProbeDistance = 0.2f;        // How far above the head a ceiling is looked for.
         private const float MinCeilingNormalY = 0.5f;           // A ceiling must face at least this much downward.
+        private const float SwapReattachTolerance = 0.15f;      // After a swap, a wall run only continues on a surface at most this far from the body.
+        private const float TraversalTurnAngle = 5f;            // The body counts as turning between surfaces while it is more than this many degrees off.
 
         //==================== INPUT =====================
         [Header("Input")]
@@ -149,12 +156,34 @@ namespace TheSpaceBetween
         private Vector3 tiltNormal = Vector3.up;
         private float attachWeight;
 
+        //==================== EVENTS =====================
+        /// <summary>Raised on the frame a jump starts. True for a jump from the ground, false for a mid-air jump.</summary>
+        public event Action<bool> Jumped;
+
+        /// <summary>Raised on the frame a wall jump launches the player away from a surface.</summary>
+        public event Action WallJumped;
+
+        /// <summary>Raised on the frame the player lands on the ground, with the downward speed at impact in units per second.</summary>
+        public event Action<float> Landed;
+
         /// <summary>The way the player last moved, as a world direction along X.</summary>
         public Vector3 Facing => new Vector3(facingSign, 0f, 0f);
 
         public bool IsRunning => isRunning;
 
         public bool IsWallRunning => isWallRunning;
+
+        /// <summary>True while standing on something. False during a wall run, which has its own surface.</summary>
+        public bool IsGrounded => isGrounded;
+
+        /// <summary>
+        /// True while the body is still turning to match a new surface direction: attaching to a wall, following a curve,
+        /// or turning back upright after leaving a wall. False once the body lines up with its surface.
+        /// </summary>
+        public bool IsTraversing => Vector3.Angle(tiltNormal, isWallRunning ? wallNormal : Vector3.up) > TraversalTurnAngle;
+
+        /// <summary>How fast the player actually moved last frame, in units per second, along the ground, a surface or the air.</summary>
+        public float Speed => controller != null && controller.enabled ? controller.velocity.magnitude : 0f;
 
         /// <summary>True from a wall jump until the player reaches another surface or the ground.</summary>
         public bool IsInWallJump => inWallJump;
@@ -232,13 +261,14 @@ namespace TheSpaceBetween
                 return;
             }
 
+            float input = moveAction.ReadValue<float>();
+
             if (wasFrozen)
             {
                 wasFrozen = false;
-                OnMovedBySwap();
+                OnMovedBySwap(input);
             }
 
-            float input = moveAction.ReadValue<float>();
             if (Mathf.Abs(input) > FacingInputThreshold)
             {
                 facingSign = Mathf.Sign(input);
@@ -277,8 +307,15 @@ namespace TheSpaceBetween
         private void UpdateWalking(float input)
         {
             // Right after a teleport the controller's grounded flag is out of date, so one frame is skipped.
+            bool wasGrounded = isGrounded;
             isGrounded = controller.isGrounded && !treatAsAirborneThisFrame;
             treatAsAirborneThisFrame = false;
+
+            // Read before the grounded speed below replaces it, so the event reports how hard the landing was.
+            if (isGrounded && !wasGrounded)
+            {
+                Landed?.Invoke(Mathf.Max(-verticalSpeed, 0f));
+            }
 
             if (isGrounded)
             {
@@ -301,11 +338,13 @@ namespace TheSpaceBetween
                 if (isGrounded)
                 {
                     verticalSpeed = JumpSpeed();
+                    Jumped?.Invoke(true);
                 }
                 else if (airJumpsLeft > 0)
                 {
                     airJumpsLeft--;
                     verticalSpeed = JumpSpeed();
+                    Jumped?.Invoke(false);
                 }
             }
 
@@ -558,6 +597,7 @@ namespace TheSpaceBetween
             wallJumpTime = Time.time;
 
             ScanForOppositeWall(awaySign);
+            WallJumped?.Invoke();
         }
 
         // Debug only: looks straight ahead along the launch to show whether a wall lies there. It never attaches the player.
@@ -615,10 +655,17 @@ namespace TheSpaceBetween
             body.SetPositionAndRotation(transform.position + controller.center + wallNormal * lift, tilt);
         }
 
-        // A smooth swap keeps momentum, but the player is now somewhere else. A wall jump was heading for a wall
-        // near the old position, so it ends here; its sideways speed is kept and fades out under normal control.
-        private void OnMovedBySwap()
+        // A smooth swap keeps momentum, but the player is now somewhere else. A wall run only continues if a runnable
+        // surface is right against the body at the new position; otherwise its speed is handed to normal movement, so
+        // the player is never pulled onto a wall it has not reached. A wall jump was heading for a wall near the old
+        // position, so it ends here; its sideways speed is kept and fades out under normal control.
+        private void OnMovedBySwap(float input)
         {
+            if (isWallRunning && !SurfaceTouchingAfterSwap())
+            {
+                EndWallRun(input);
+            }
+
             if (!inWallJump)
             {
                 return;
@@ -627,6 +674,15 @@ namespace TheSpaceBetween
             inWallJump = false;
             carriedX = wallJumpVelocityX;
             ReportWallJump("ended by a swap");
+        }
+
+        // True when a surface that can be run on, facing the same way as the current one, is touching the body.
+        private bool SurfaceTouchingAfterSwap()
+        {
+            Vector3 center = transform.position + controller.center;
+            float touching = HalfSegment() * Mathf.Abs(wallNormal.y) + controller.radius + controller.skinWidth;
+            return Physics.Raycast(center, -wallNormal, out RaycastHit hit, touching + SwapReattachTolerance, ~0, QueryTriggerInteraction.Ignore)
+                   && IsRunnable(hit.collider, hit.normal);
         }
 
         //==================== PUBLIC API =====================

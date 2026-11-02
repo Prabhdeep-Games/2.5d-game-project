@@ -8,6 +8,9 @@ namespace TheSpaceBetween
     /// It pulls the camera back a little and turns on the Position Composer's look ahead, then eases both back
     /// to the normal framing when the player is on the ground again.
     ///
+    /// It also adds the extra distance of any CameraZone the player is in (a vertical shaft, for example), so this
+    /// stays the only script that sets the camera distance.
+    ///
     /// Put this on the CinemachineCamera object that has the Position Composer.
     /// </summary>
     [RequireComponent(typeof(CinemachineCamera), typeof(CinemachinePositionComposer))]
@@ -32,10 +35,16 @@ namespace TheSpaceBetween
         [Tooltip("How quickly the camera changes to and from the wall run framing. 1 takes about a second; higher is quicker.")]
         [SerializeField, Min(0.1f)] private float blendSpeed = 2.5f;
 
+        [Tooltip("How quickly the camera moves to the distance of a Camera Zone the player enters or leaves, in units per second.")]
+        [SerializeField, Min(0.1f)] private float zoneBlendSpeed = 8f;
+
         //==================== DEBUG =====================
         [Header("Debug")]
         [Tooltip("0 is the normal framing, 1 is the full wall run framing.")]
         [ReadOnly, SerializeField] private float framingWeight;
+
+        [Tooltip("Extra distance currently added by Camera Zones.")]
+        [ReadOnly, SerializeField] private float zoneDistance;
 
         private CinemachineCamera cinemachineCamera;
         private CinemachinePositionComposer composer;
@@ -43,6 +52,8 @@ namespace TheSpaceBetween
         private LookaheadSettings baseLookahead;
 
         public float FramingWeight => framingWeight;
+
+        public float ZoneDistance => zoneDistance;
 
         //==================== LIFECYCLE =====================
         private void Awake()
@@ -86,7 +97,10 @@ namespace TheSpaceBetween
             framingWeight = Mathf.MoveTowards(framingWeight, target, blendSpeed * Time.deltaTime);
             float eased = Mathf.SmoothStep(0f, 1f, framingWeight);
 
-            composer.CameraDistance = baseDistance + zoomOut * eased;
+            float zoneTarget = CameraZone.ExtraDistanceAt(player.transform.position);
+            zoneDistance = Mathf.MoveTowards(zoneDistance, zoneTarget, zoneBlendSpeed * Time.deltaTime);
+
+            composer.CameraDistance = baseDistance + zoomOut * eased + zoneDistance;
 
             LookaheadSettings settings = composer.Lookahead;
             settings.Enabled = lookAhead > 0f;

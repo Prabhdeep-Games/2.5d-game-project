@@ -4598,7 +4598,9 @@ MonoBehaviour:
   zoomOut: 3
   lookAhead: 0.3
   blendSpeed: 2.5
+  zoneBlendSpeed: 8
   framingWeight: 0
+  zoneDistance: 0
 --- !u!114 &1329613162
 MonoBehaviour:
   m_ObjectHideFlags: 0
