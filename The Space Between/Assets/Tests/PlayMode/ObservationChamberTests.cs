@@ -26,6 +26,7 @@ namespace TheSpaceBetween.Tests
         private const float BesideGlassX = 9.5f;
         private const float PlatformTop = 0.9f;
         private const float BlendSeconds = 1f;
+        private const float TimeLimitSeconds = 3f;   // Well past the blend, so a slow frame cannot end observing before it is checked.
         private const float SwapWaitLimitSeconds = 3f;
         private const float CameraProbeRadius = 0.2f;
 
@@ -246,10 +247,10 @@ namespace TheSpaceBetween.Tests
         public IEnumerator TimeLimit_EndsObservation_AndRestoresControl()
         {
             yield return LoadScene();
-            typeof(ObservationPoint).GetField("maximumObservationDuration", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).SetValue(point, 1.2f);
+            typeof(ObservationPoint).GetField("maximumObservationDuration", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).SetValue(point, TimeLimitSeconds);
             yield return EnterObservation();
 
-            yield return WaitSeconds(0.5f);
+            yield return WaitSeconds(TimeLimitSeconds - BlendSeconds + 0.5f);
             Assert.IsFalse(point.IsObserving, "The time limit should end observing.");
             yield return WaitSeconds(BlendSeconds);
             Assert.IsFalse(controller.ControlLocked);
