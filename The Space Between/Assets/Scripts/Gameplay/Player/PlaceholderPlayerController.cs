@@ -129,6 +129,9 @@ namespace TheSpaceBetween
         [Tooltip("What the last wall jump was heading for, and whether it was reached.")]
         [ReadOnly, SerializeField] private string lastWallJump = "none yet";
 
+        [Tooltip("Whether movement input is being ignored, for example while the player observes a room. Gravity still applies.")]
+        [ReadOnly, SerializeField] private bool controlLocked;
+
         private CharacterController controller;
         private Swappable swappable;
         private bool treatAsAirborneThisFrame;
@@ -172,6 +175,16 @@ namespace TheSpaceBetween
         public bool IsRunning => isRunning;
 
         public bool IsWallRunning => isWallRunning;
+
+        /// <summary>
+        /// While true, movement and jump input are ignored, so the player stands still. Gravity and being carried by a
+        /// platform still apply, so the player cannot be left floating. Other abilities are locked by whoever sets this.
+        /// </summary>
+        public bool ControlLocked
+        {
+            get => controlLocked;
+            set => controlLocked = value;
+        }
 
         /// <summary>True while standing on something. False during a wall run, which has its own surface.</summary>
         public bool IsGrounded => isGrounded;
@@ -261,7 +274,7 @@ namespace TheSpaceBetween
                 return;
             }
 
-            float input = moveAction.ReadValue<float>();
+            float input = controlLocked ? 0f : moveAction.ReadValue<float>();
 
             if (wasFrozen)
             {
@@ -333,7 +346,7 @@ namespace TheSpaceBetween
                 ReportWallJump("landed on the ground without reaching a wall");
             }
 
-            if (jumpAction.WasPressedThisFrame())
+            if (JumpPressedThisFrame())
             {
                 if (isGrounded)
                 {
@@ -499,7 +512,7 @@ namespace TheSpaceBetween
             }
 
             // Jumping is the way to leave a surface on purpose.
-            if (jumpAction.WasPressedThisFrame())
+            if (JumpPressedThisFrame())
             {
                 WallJump(input);
                 return;
@@ -701,6 +714,12 @@ namespace TheSpaceBetween
             surfaceSpeed = 0f;
             isWallRunning = false;
             inWallJump = false;
+        }
+
+        // A lock ignores the button, so a press during it cannot start a jump as soon as it ends.
+        private bool JumpPressedThisFrame()
+        {
+            return !controlLocked && jumpAction.WasPressedThisFrame();
         }
 
         private float JumpSpeed()

@@ -31,8 +31,8 @@ namespace TheSpaceBetween
         [Tooltip("Seconds both bodies take to grow back. Real time, not game time.")]
         [SerializeField, Min(0.01f)] private float growTime = 0.15f;
 
-        [Tooltip("Size at the smallest point, as a fraction of normal size. Never zero, so colliders stay valid.")]
-        [SerializeField, Range(0.01f, 0.5f)] private float smallestScale = 0.05f;
+        [Tooltip("Size at the smallest point, as a fraction of normal size. Never zero, so colliders stay valid. 1 keeps both bodies at full size, for a swap shown by another effect.")]
+        [SerializeField, Range(0.01f, 1f)] private float smallestScale = 0.05f;
 
         [Tooltip("How quickly the size changes over each phase. A slow start and end looks smoother.")]
         [SerializeField] private AnimationCurve easing = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
@@ -54,6 +54,9 @@ namespace TheSpaceBetween
         public event Action<Swappable> SwapCompleted;
 
         public override bool IsSwapping => isSwapping;
+
+        /// <summary>How long the whole swap takes, in real time. Half way through, the bodies trade places when both phases match.</summary>
+        public float TotalDuration => shrinkTime + growTime;
 
         //==================== LIFECYCLE =====================
         protected override void OnDisable()
