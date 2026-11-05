@@ -28,6 +28,11 @@ namespace TheSpaceBetween
     /// a short crate both keep their feet at the other's floor level.
     ///
     /// Both bodies lose all momentum when they swap.
+    ///
+    /// Gesture: with Gesture Seconds above 0, pressing swap with a valid target locks that target and waits that long
+    /// before the swap happens, so a character can close its fist first (see SwapArmAim). The rules are checked again
+    /// at the end, in case the target moved or something came between. A press with no valid target is rejected at once.
+    /// The timer lives here, so a missing or unfinished animation can never delay or block a swap.
     /// </summary>
     [RequireComponent(typeof(Swappable))]
     public class SwapAbility : MonoBehaviour
@@ -75,6 +80,11 @@ namespace TheSpaceBetween
         [Tooltip("Layers that count as solid when checking whether a body fits at its new position.")]
         [SerializeField] private LayerMask clearanceLayers = ~0;
 
+        //==================== GESTURE =====================
+        [Header("Gesture")]
+        [Tooltip("Seconds between pressing swap and the swap happening, for the hand to close. 0 swaps on the press.")]
+        [SerializeField, Min(0f)] private float gestureSeconds;
+
         //==================== EVENTS =====================
         [Header("Events")]
         [Tooltip("Invoked after a successful swap.")]
@@ -106,6 +116,8 @@ namespace TheSpaceBetween
         private Vector3 aimEnd;
         private Vector2 lastPointer;
         private bool stickWasLastUsed;
+        private Swappable gestureTarget;
+        private float gestureElapsed;
 
         private readonly Collider[] candidateBuffer = new Collider[MaxCandidates];
         private readonly Collider[] clearanceBuffer = new Collider[MaxCandidates];
@@ -122,6 +134,15 @@ namespace TheSpaceBetween
         public SwapRejection LastResult => lastResult;
 
         public float Range => range;
+
+        /// <summary>True from an accepted swap press until the fist has closed and the swap happens.</summary>
+        public bool IsGesturing => gestureTarget != null;
+
+        /// <summary>How far through the gesture the hand should be: 0 at the press, 1 at the moment of the swap.</summary>
+        public float GestureProgress => IsGesturing && gestureSeconds > 0f ? Mathf.Clamp01(gestureElapsed / gestureSeconds) : 0f;
+
+        /// <summary>What the player is reaching for: the locked target during a gesture, otherwise the aimed target. Null while a swap plays.</summary>
+        public Swappable FocusTarget => IsGesturing ? gestureTarget : Target;
 
         /// <summary>The object currently aimed at, or null. Always null while a swap is playing.</summary>
         public Swappable Target => IsSwapping ? null : currentTarget;
@@ -168,6 +189,7 @@ namespace TheSpaceBetween
             swapAction.Disable();
             aimStickAction.Disable();
             pointerAction.Disable();
+            gestureTarget = null;
         }
 
         protected virtual void Update()
@@ -175,6 +197,11 @@ namespace TheSpaceBetween
             if (!IsSwapping)
             {
                 RefreshTargeting();
+            }
+
+            if (IsGesturing)
+            {
+                UpdateGesture();
             }
         }
 
@@ -195,7 +222,7 @@ namespace TheSpaceBetween
         /// <summary>Attempts a swap with the aimed target. Returns true when a swap was accepted.</summary>
         public bool TrySwap()
         {
-            if (IsSwapping)
+            if (IsSwapping || IsGesturing)
             {
                 return false;
             }
@@ -215,7 +242,63 @@ namespace TheSpaceBetween
         //==================== TARGETING =====================
         private void OnSwapPerformed(InputAction.CallbackContext context)
         {
-            TrySwap();
+            if (gestureSeconds <= 0f)
+            {
+                TrySwap();
+                return;
+            }
+
+            BeginGesture();
+        }
+
+        // A press that cannot work is rejected straight away instead of closing the hand on nothing.
+        private void BeginGesture()
+        {
+            if (IsSwapping || IsGesturing)
+            {
+                return;
+            }
+
+            RefreshTargeting();
+
+            if (currentTarget == null || currentStatus != SwapRejection.None)
+            {
+                Finish(currentStatus, null);
+                return;
+            }
+
+            gestureTarget = currentTarget;
+            gestureElapsed = 0f;
+        }
+
+        // Runs on game time, so pausing the game pauses the gesture too.
+        private void UpdateGesture()
+        {
+            gestureElapsed += Time.deltaTime;
+            if (gestureElapsed < gestureSeconds)
+            {
+                return;
+            }
+
+            Swappable chosen = gestureTarget;
+            gestureTarget = null;
+
+            if (!chosen.isActiveAndEnabled || Vector3.Distance(self.Center, chosen.Center) > range)
+            {
+                Finish(SwapRejection.NoTargetInRange, null);
+                return;
+            }
+
+            // Checked again: the target or the player has been moving during the gesture.
+            SwapRejection result = Evaluate(chosen);
+            if (result != SwapRejection.None)
+            {
+                Finish(result, null);
+                return;
+            }
+
+            Execute(chosen);
+            Finish(SwapRejection.None, chosen);
         }
 
         // Works out the aim and the target from the current state of the world.

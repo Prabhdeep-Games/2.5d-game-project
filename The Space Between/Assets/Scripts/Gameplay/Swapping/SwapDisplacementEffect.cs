@@ -55,6 +55,7 @@ namespace TheSpaceBetween
         [ReadOnly, SerializeField] private bool isPlaying;
 
         private readonly List<Silhouette> silhouettes = new List<Silhouette>();
+        private readonly Dictionary<SkinnedMeshRenderer, Mesh> bakedMeshes = new Dictionary<SkinnedMeshRenderer, Mesh>();
         private Swappable self;
         private Swappable other;
         private MaterialPropertyBlock block;
@@ -96,6 +97,16 @@ namespace TheSpaceBetween
             }
 
             isPlaying = false;
+        }
+
+        private void OnDestroy()
+        {
+            foreach (Mesh baked in bakedMeshes.Values)
+            {
+                Destroy(baked);
+            }
+
+            bakedMeshes.Clear();
         }
 
         // Drawn every frame the effect lasts. LateUpdate also runs while game time is stopped.
@@ -168,6 +179,24 @@ namespace TheSpaceBetween
                 {
                     silhouettes.Add(new Silhouette { Mesh = filter.sharedMesh, Transform = meshRenderer.transform, Layer = meshRenderer.gameObject.layer });
                 }
+            }
+
+            // An animated character's shape is taken once, in the pose it has as the swap starts. Game time stops then, so it holds that pose.
+            foreach (SkinnedMeshRenderer skinned in body.GetComponentsInChildren<SkinnedMeshRenderer>())
+            {
+                if (!skinned.enabled)
+                {
+                    continue;
+                }
+
+                if (!bakedMeshes.TryGetValue(skinned, out Mesh baked))
+                {
+                    baked = new Mesh { name = skinned.name + " (swap silhouette)" };
+                    bakedMeshes.Add(skinned, baked);
+                }
+
+                skinned.BakeMesh(baked, true);
+                silhouettes.Add(new Silhouette { Mesh = baked, Transform = skinned.transform, Layer = skinned.gameObject.layer });
             }
         }
 
