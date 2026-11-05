@@ -12,6 +12,7 @@ namespace TheSpaceBetween
     ///   IsGrounded     bool   standing on something
     ///   IsWallRunning  bool   on a surface in a wall run
     ///   IsTraversing   bool   the body is still turning to a new surface direction (a curve, or attaching to a wall)
+    ///   IsSliding      bool   sliding along the ground
     /// One-shot events are triggers, set when the movement raises the matching event:
     ///   Jump, WallJump, Land (only for a landing at least Min Landing Speed hard), Swap
     ///
@@ -27,6 +28,7 @@ namespace TheSpaceBetween
         private static readonly int IsGroundedId = Animator.StringToHash("IsGrounded");
         private static readonly int IsWallRunningId = Animator.StringToHash("IsWallRunning");
         private static readonly int IsTraversingId = Animator.StringToHash("IsTraversing");
+        private static readonly int IsSlidingId = Animator.StringToHash("IsSliding");
         private static readonly int JumpId = Animator.StringToHash("Jump");
         private static readonly int WallJumpId = Animator.StringToHash("WallJump");
         private static readonly int LandId = Animator.StringToHash("Land");
@@ -34,13 +36,13 @@ namespace TheSpaceBetween
 
         private static readonly string[] RequiredParameters =
         {
-            "Speed", "IsGrounded", "IsWallRunning", "IsTraversing", "Jump", "WallJump", "Land", "Swap"
+            "Speed", "IsGrounded", "IsWallRunning", "IsTraversing", "IsSliding", "Jump", "WallJump", "Land", "Swap"
         };
 
-        // The states of the placeholder controller, so the debug field can name the current one.
+        // The states of the player controllers, so the debug field can name the current one.
         private static readonly string[] KnownStates =
         {
-            "Idle", "Run", "Jump", "Fall", "Land", "WallRun", "Traverse", "WallJump", "Swap"
+            "Idle", "Run", "Locomotion", "Jump", "Fall", "Land", "Slide", "WallRun", "Traverse", "WallJump", "Swap"
         };
 
         //==================== REFERENCES =====================
@@ -52,6 +54,11 @@ namespace TheSpaceBetween
         [Header("Landing")]
         [Tooltip("Slowest downward speed, in units per second, that sets the Land trigger. Smaller drops, like stepping off a low ledge, go straight back to idle or running.")]
         [SerializeField, Min(0f)] private float minLandingSpeed = 4f;
+
+        //==================== SMOOTHING =====================
+        [Header("Smoothing")]
+        [Tooltip("Seconds the Speed parameter takes to catch up with the real speed. Above 0 stops a blend between walking and running from jumping when the speed changes suddenly. 0 passes it straight through.")]
+        [SerializeField, Min(0f)] private float speedDampSeconds;
 
         //==================== DEBUG =====================
         [Header("Debug")]
@@ -113,10 +120,17 @@ namespace TheSpaceBetween
                 return;
             }
 
-            animator.SetFloat(SpeedId, movement.Speed);
+            animator.SetFloat(SpeedId, movement.Speed, speedDampSeconds, Time.deltaTime);
             animator.SetBool(IsGroundedId, movement.IsGrounded);
             animator.SetBool(IsWallRunningId, movement.IsWallRunning);
             animator.SetBool(IsTraversingId, movement.IsTraversing);
+            animator.SetBool(IsSlidingId, movement.IsSliding);
+
+            // Landing straight into a slide skips the landing animation, so its trigger must not wait around for later.
+            if (movement.IsSliding)
+            {
+                animator.ResetTrigger(LandId);
+            }
 
             currentState = NameOf(animator.GetCurrentAnimatorStateInfo(0).shortNameHash);
         }
