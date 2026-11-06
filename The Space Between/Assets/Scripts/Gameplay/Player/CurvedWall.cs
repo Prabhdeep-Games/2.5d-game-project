@@ -49,6 +49,23 @@ namespace TheSpaceBetween
 
         private Mesh mesh;
 
+        /// <summary>Raised after the mesh is rebuilt, so anything shaped to match it can follow.</summary>
+        public event System.Action Rebuilt;
+
+        public float Radius => radius;
+        public float ArcAngle => arcAngle;
+        public float Width => width;
+        public float Thickness => thickness;
+        public int Segments => segments;
+        public bool IsMirrored => mirror;
+
+        /// <summary>A point on the underside of the arc, in local space, the given angle (in radians) from its flat start.</summary>
+        public Vector3 UndersidePoint(float angle)
+        {
+            float side = mirror ? -1f : 1f;
+            return ArcPoint(angle, side) - ArcNormal(angle, side) * thickness;
+        }
+
         //==================== LIFECYCLE =====================
         private void OnEnable()
         {
@@ -148,6 +165,8 @@ namespace TheSpaceBetween
             MeshCollider meshCollider = GetComponent<MeshCollider>();
             meshCollider.sharedMesh = null;
             meshCollider.sharedMesh = mesh;
+
+            Rebuilt?.Invoke();
         }
 
         // A point on the arc, the given angle (in radians) from its flat start.
@@ -193,6 +212,11 @@ namespace TheSpaceBetween
         //==================== GIZMOS =====================
         private void OnDrawGizmosSelected()
         {
+            if (!GeneratedRoom.ShowsGizmos(this))
+            {
+                return;
+            }
+
             if (!drawNormals)
             {
                 return;

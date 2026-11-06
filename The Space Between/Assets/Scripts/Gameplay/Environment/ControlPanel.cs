@@ -483,6 +483,11 @@ namespace TheSpaceBetween
         //==================== GIZMOS =====================
         private void OnDrawGizmosSelected()
         {
+            if (!GeneratedRoom.ShowsGizmos(this))
+            {
+                return;
+            }
+
             Gizmos.color = Color.yellow;
             if (activation == PanelActivation.Interact)
             {

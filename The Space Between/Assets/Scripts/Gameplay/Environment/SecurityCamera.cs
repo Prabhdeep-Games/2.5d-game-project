@@ -488,6 +488,11 @@ namespace TheSpaceBetween
         //==================== GIZMOS =====================
         private void OnDrawGizmosSelected()
         {
+            if (!GeneratedRoom.ShowsGizmos(this))
+            {
+                return;
+            }
+
             Vector3 origin = transform.position;
             Vector3 direction = ViewDirection;
             Vector3 left = Quaternion.AngleAxis(-viewAngle * 0.5f, Vector3.forward) * direction * range;

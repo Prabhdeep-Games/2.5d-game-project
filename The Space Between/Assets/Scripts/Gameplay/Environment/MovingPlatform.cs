@@ -241,6 +241,11 @@ namespace TheSpaceBetween
         //==================== GIZMOS =====================
         private void OnDrawGizmosSelected()
         {
+            if (!GeneratedRoom.ShowsGizmos(this))
+            {
+                return;
+            }
+
             BoxCollider gizmoBox = GetComponent<BoxCollider>();
             if (gizmoBox == null)
             {

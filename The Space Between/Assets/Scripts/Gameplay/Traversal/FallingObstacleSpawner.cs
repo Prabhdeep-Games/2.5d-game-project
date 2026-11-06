@@ -18,7 +18,7 @@ namespace TheSpaceBetween
         [Tooltip("The obstacle prefab to drop. It needs a FallingObstacle component.")]
         [SerializeField] private FallingObstacle obstaclePrefab;
 
-        [Tooltip("The room that is reset when an obstacle hits the player.")]
+        [Tooltip("The room that is reset when an obstacle hits the player. Empty uses the Room Reset whose area contains this spawner.")]
         [SerializeField] private RoomReset room;
 
         //==================== TIMING =====================
@@ -75,6 +75,11 @@ namespace TheSpaceBetween
                 return;
             }
 
+            if (room == null)
+            {
+                room = RoomReset.FindContaining(transform.position);
+            }
+
             nextDropTime = Time.time + initialDelay;
         }
 
@@ -108,6 +113,11 @@ namespace TheSpaceBetween
         //==================== GIZMOS =====================
         private void OnDrawGizmos()
         {
+            if (!GeneratedRoom.ShowsGizmos(this))
+            {
+                return;
+            }
+
             if (!drawGizmos)
             {
                 return;

@@ -1355,6 +1355,7 @@ MonoBehaviour:
   isWallRunning: 0
   surfaceSpeed: 0
   verticalSpeed: 0
+  lastFallHeight: 0
   airJumpsLeft: 0
   lastWallJump: none yet
   controlLocked: 0
@@ -1689,9 +1690,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: TheSpaceBetween.Runtime::TheSpaceBetween.PlayerAnimationDriver
   animator: {fileID: 628762289}
   minLandingSpeed: 11
+  hardLandingHeight: 6
   speedDampSeconds: 0.08
   logTriggers: 0
   currentState: none
+  lastLanding: none yet
 --- !u!114 &211780674
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10240,9 +10243,9 @@ MonoBehaviour:
   TargetOffset: {x: 0, y: 0, z: 0}
   Damping: {x: 0.6, y: 0.5, z: 0}
   Lookahead:
-    Enabled: 0
+    Enabled: 1
     Time: 0
-    Smoothing: 0
+    Smoothing: 4
     IgnoreY: 0
 --- !u!114 &1329613159
 MonoBehaviour:

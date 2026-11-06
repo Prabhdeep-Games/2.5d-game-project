@@ -77,7 +77,6 @@ MonoBehaviour:
   isLockedDown: 0
   isActive: 0
   startsLocked: 1
-  unlockEvent: {fileID: 0}
   opensWhenUnlocked: 1
   startsOpen: 0
   openOffset: {x: 0, y: 4, z: 0}

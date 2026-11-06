@@ -149,6 +149,11 @@ namespace TheSpaceBetween
         //==================== GIZMOS =====================
         private void OnDrawGizmosSelected()
         {
+            if (!GeneratedRoom.ShowsGizmos(this))
+            {
+                return;
+            }
+
             Gizmos.color = solid ? Color.white : Color.gray;
             Gizmos.DrawWireCube(transform.position, size);
         }

@@ -165,6 +165,9 @@ namespace TheSpaceBetween
         [Tooltip("Current vertical speed.")]
         [ReadOnly, SerializeField] private float verticalSpeed;
 
+        [Tooltip("Height of the last fall in world units, from the highest point reached in the air to the landing.")]
+        [ReadOnly, SerializeField] private float lastFallHeight;
+
         [Tooltip("Extra jumps that can still be used in mid-air. A swap that leaves the player airborne grants one.")]
         [ReadOnly, SerializeField] private int airJumpsLeft;
 
@@ -182,6 +185,7 @@ namespace TheSpaceBetween
 
         private Vector3 approachVelocity;
         private float carriedX;
+        private float airbornePeakY;
 
         private Vector3 contactNormal;
         private Collider contactCollider;
@@ -281,7 +285,16 @@ namespace TheSpaceBetween
         public bool IsTraversing => Vector3.Angle(tiltNormal, isWallRunning ? wallNormal : Vector3.up) > TraversalTurnAngle;
 
         /// <summary>How fast the player actually moved last frame, in units per second, along the ground, a surface or the air.</summary>
-        public float Speed => controller != null && controller.enabled ? controller.velocity.magnitude : 0f;
+        public float Speed => Velocity.magnitude;
+
+        /// <summary>How the player actually moved last frame, in units per second. Zero while the controller is off.</summary>
+        public Vector3 Velocity => controller != null && controller.enabled ? controller.velocity : Vector3.zero;
+
+        /// <summary>
+        /// Height of the last fall in world units, from the highest point reached in the air to the landing. Set before
+        /// Landed is raised. A wall run, a swap or a reset starts the measurement again from where the player is.
+        /// </summary>
+        public float LastFallHeight => lastFallHeight;
 
         /// <summary>True from a wall jump until the player reaches another surface or the ground.</summary>
         public bool IsInWallJump => inWallJump;
@@ -448,8 +461,11 @@ namespace TheSpaceBetween
             // Read before the grounded speed below replaces it, so the event reports how hard the landing was.
             if (isGrounded && !wasGrounded)
             {
+                lastFallHeight = Mathf.Max(airbornePeakY - transform.position.y, 0f);
                 Landed?.Invoke(Mathf.Max(-verticalSpeed, 0f));
             }
+
+            TrackAirbornePeak();
 
             if (isGrounded)
             {
@@ -519,6 +535,20 @@ namespace TheSpaceBetween
             Vector3 velocity = new Vector3(horizontal, verticalSpeed, 0f);
             CollisionFlags hits = controller.Move(velocity * Time.deltaTime);
             slideBlocked = isSliding && (hits & CollisionFlags.Sides) != 0;
+        }
+
+        //==================== FALL HEIGHT =====================
+        // On the ground the fall starts where the player stands; in the air it starts at the highest point reached.
+        private void TrackAirbornePeak()
+        {
+            float height = transform.position.y;
+            airbornePeakY = isGrounded ? height : Mathf.Max(airbornePeakY, height);
+        }
+
+        // Starts measuring a fall from here, after anything that moved the player without a fall: a wall run, a swap, a reset.
+        private void RestartFallMeasurement()
+        {
+            airbornePeakY = transform.position.y;
         }
 
         //==================== SLIDE =====================
@@ -841,6 +871,7 @@ namespace TheSpaceBetween
             surfaceSpeed = 0f;
             lastWallNormal = wallNormal;
             cooldownUntil = Time.time + SameWallCooldownSeconds;
+            RestartFallMeasurement();
         }
 
         //==================== WALL JUMP =====================
@@ -924,6 +955,7 @@ namespace TheSpaceBetween
         // position, so it ends here; its sideways speed is kept and fades out under normal control.
         private void OnMovedBySwap(float input)
         {
+            RestartFallMeasurement();
             if (isWallRunning && !SurfaceTouchingAfterSwap())
             {
                 EndWallRun(input);
@@ -954,6 +986,7 @@ namespace TheSpaceBetween
         {
             airJumpsLeft = 1;
             treatAsAirborneThisFrame = true;
+            RestartFallMeasurement();
         }
 
         /// <summary>Removes all momentum, called after a swap or a reset. A slide ends too unless there is no room to stand.</summary>
@@ -965,6 +998,7 @@ namespace TheSpaceBetween
             isWallRunning = false;
             inWallJump = false;
             slideSpeed = 0f;
+            RestartFallMeasurement();
             if (isSliding && HasHeadroom())
             {
                 StopSliding();

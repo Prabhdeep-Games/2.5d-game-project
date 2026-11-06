@@ -13,12 +13,11 @@ namespace TheSpaceBetween.Tests
 
         private static readonly Vector3 TestOffset = new Vector3(0f, 3f, 0f);
 
-        private AccessDoor CreateDoor(bool startsLocked, GameEvent unlockEvent = null, bool opensWhenUnlocked = true, UnityEvent rejected = null)
+        private AccessDoor CreateDoor(bool startsLocked, bool opensWhenUnlocked = true, UnityEvent rejected = null)
         {
             AccessDoor door = CreateInactive<AccessDoor>("Door Test");
             door.transform.localPosition = Vector3.zero;
             SetField(door, "startsLocked", startsLocked);
-            SetField(door, "unlockEvent", unlockEvent);
             SetField(door, "opensWhenUnlocked", opensWhenUnlocked);
             SetField(door, "openOffset", TestOffset);
             SetField(door, "travelTime", TestTravelTime);
@@ -86,19 +85,6 @@ namespace TheSpaceBetween.Tests
 
             Assert.IsFalse(door.IsLocked);
             Assert.AreEqual(AccessDoor.DoorState.Closed, door.State);
-        }
-
-        [UnityTest]
-        public IEnumerator RaisingTheUnlockEvent_UnlocksTheDoor()
-        {
-            GameEvent unlock = Track(ScriptableObject.CreateInstance<GameEvent>());
-            AccessDoor door = CreateDoor(startsLocked: true, unlockEvent: unlock);
-
-            unlock.Raise();
-            yield return WaitForState(door, AccessDoor.DoorState.Open);
-
-            Assert.IsFalse(door.IsLocked);
-            Assert.AreEqual(AccessDoor.DoorState.Open, door.State);
         }
 
         [UnityTest]

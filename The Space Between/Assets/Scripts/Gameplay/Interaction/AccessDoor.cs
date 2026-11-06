@@ -4,16 +4,8 @@ using UnityEngine.Events;
 namespace TheSpaceBetween
 {
     /// <summary>
-    /// A sealed door that controls access. While locked it refuses to open, and it tells the world
-    /// that it refused. Once unlocked it slides to its open position, which physically clears
-    /// the way because the door keeps its collider.
-    ///
-    /// The door does not decide who may unlock it. A control panel powers it (powered means unlocked),
-    /// a puzzle raises the GameEvent assigned as the unlock event, or a script calls Unlock directly.
-    /// A security camera can put it in lockdown: it then closes and refuses to open, even when unlocked,
-    /// until the camera releases it. If Opens When Unlocked is on, it opens again by itself.
-    ///
-    /// The door never closes onto the player or a crate: it waits until the way is clear.
+    /// A sealed door that slides open once a control panel powers it or a script calls Unlock.
+    /// A security camera lockdown keeps it closed, and it never closes onto the player or a crate.
     /// </summary>
     public class AccessDoor : Mechanism
     {
@@ -32,9 +24,6 @@ namespace TheSpaceBetween
         [Header("Access")]
         [Tooltip("Whether the door starts locked. A locked door refuses to open until Unlock is called or a panel powers it.")]
         [SerializeField] private bool startsLocked = true;
-
-        [Tooltip("Optional event that unlocks this door when raised, for example when the player picks up a key.")]
-        [SerializeField] private GameEvent unlockEvent;
 
         [Tooltip("Open the door as soon as it is unlocked, and again when a lockdown ends.")]
         [SerializeField] private bool opensWhenUnlocked = true;
@@ -74,7 +63,7 @@ namespace TheSpaceBetween
         private float speed;
         private Collider doorCollider;
 
-        //==================== PUBLIC API =====================
+        //==================== PUBLIC =====================
         /// <summary>Locked means unpowered. A door in lockdown is not locked, but still refuses to open.</summary>
         public bool IsLocked => !IsPowered;
 
@@ -164,23 +153,6 @@ namespace TheSpaceBetween
             }
         }
 
-        private void OnEnable()
-        {
-            if (unlockEvent != null)
-            {
-                unlockEvent.Raised += Unlock;
-            }
-        }
-
-        protected override void OnDisable()
-        {
-            base.OnDisable();
-            if (unlockEvent != null)
-            {
-                unlockEvent.Raised -= Unlock;
-            }
-        }
-
         private void Update()
         {
             isObstructed = false;
@@ -238,6 +210,11 @@ namespace TheSpaceBetween
         //==================== GIZMOS =====================
         private void OnDrawGizmosSelected()
         {
+            if (!GeneratedRoom.ShowsGizmos(this))
+            {
+                return;
+            }
+
             Vector3 closedLocal = Application.isPlaying ? closedLocalPosition : transform.localPosition;
             Vector3 openLocal = closedLocal + openOffset;
 

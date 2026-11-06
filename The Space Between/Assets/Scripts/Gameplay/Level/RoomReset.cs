@@ -52,6 +52,21 @@ namespace TheSpaceBetween
 
         public bool PlayerInside => playerInside;
 
+        /// <summary>The first active room reset whose area contains a point, or null.</summary>
+        public static RoomReset FindContaining(Vector3 point)
+        {
+            foreach (RoomReset room in FindObjectsByType<RoomReset>(FindObjectsSortMode.None))
+            {
+                BoxCollider box = room.area != null ? room.area : room.GetComponent<BoxCollider>();
+                if (box != null && box.bounds.Contains(point))
+                {
+                    return room;
+                }
+            }
+
+            return null;
+        }
+
         //==================== LIFECYCLE =====================
         private void Reset()
         {
@@ -164,6 +179,11 @@ namespace TheSpaceBetween
         //==================== GIZMOS =====================
         private void OnDrawGizmos()
         {
+            if (!GeneratedRoom.ShowsGizmos(this))
+            {
+                return;
+            }
+
             BoxCollider box = GetComponent<BoxCollider>();
             if (box == null)
             {

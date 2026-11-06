@@ -6,20 +6,8 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/Basic_Swap.unity
-    guid: 99c9720ab356a0642a771bea13969a05
-  - enabled: 1
-    path: Assets/Scenes/Smooth_Swap.unity
-    guid: 93c216df927d1c64084e66689d34ae2d
-  - enabled: 1
-    path: Assets/Scenes/Test_Room.unity
-    guid: fec33d86e4fb81044933de42cd4ee40e
-  - enabled: 1
     path: Assets/Scenes/Wall_Run_Test.unity
     guid: 615c98d88ed4a57468e9c7a5ac118c66
-  - enabled: 1
-    path: Assets/Scenes/Greybox_Level_01.unity
-    guid: 929fc1f82ef7599419ef114b95096e0d
   - enabled: 1
     path: Assets/Scenes/Environment_Elements.unity
     guid: abaa1a1a1e5669046b077d1577c2cf8f
@@ -29,6 +17,12 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Playtest_Full.unity
     guid: bcab1ac80d2da8d4da2762339694cc4f
+  - enabled: 1
+    path: Assets/Scenes/Room_Generator_Sandbox.unity
+    guid: 4df3a6a67c110bc45a82192f7c7057c1
+  - enabled: 1
+    path: Assets/Scenes/animation_Trial.unity
+    guid: 03bca54c96c4d694e853d8c799dd16a6
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: ac34df2921f869b4babb388f47a0c7aa, type: 3}

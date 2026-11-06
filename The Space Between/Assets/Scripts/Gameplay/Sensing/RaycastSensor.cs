@@ -124,6 +124,11 @@ namespace TheSpaceBetween
         //==================== GIZMOS =====================
         private void OnDrawGizmosSelected()
         {
+            if (!GeneratedRoom.ShowsGizmos(this))
+            {
+                return;
+            }
+
             Vector3 origin = transform.position;
             Vector3 end = origin + WorldDirection * maxDistance;
 
