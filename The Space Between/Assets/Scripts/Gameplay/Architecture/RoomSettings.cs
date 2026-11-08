@@ -12,7 +12,8 @@ namespace TheSpaceBetween
         RestrictedCorridor,
         MonumentalHall,
         VerticalConnection,
-        Custom
+        Custom,
+        ChaseRun
     }
 
     /// <summary>How a generated room is lit. Choosing one loads a starting set of values, which can then be changed.</summary>
@@ -48,7 +49,8 @@ namespace TheSpaceBetween
     {
         None,
         Stairs,
-        CurvedWall
+        CurvedWall,
+        WallJumpShaft
     }
 
     /// <summary>
@@ -120,11 +122,11 @@ namespace TheSpaceBetween
         [Tooltip("How many full height cross walls with an opening divide the room. These are the layered thresholds of a controlled space.")]
         [SerializeField, Range(0, 4)] private int interiorThresholds;
 
-        [Tooltip("How the route reaches the exit when it is higher than the entrance. Curved Wall makes it a wall run, always starting from a curve.")]
+        [Tooltip("How the route reaches the exit when it is higher than the entrance. Curved Wall makes it a wall run, always starting from a curve. Wall Jump Shaft drops into a deep pit between two curved walls, climbed by wall jumping from one to the other.")]
         [SerializeField] private RoomLevelChange levelChange = RoomLevelChange.None;
 
-        [Tooltip("How much higher the exit floor is than the entrance floor. Ignored when Level Change is None.")]
-        [ShowIf(nameof(levelChange), RoomLevelChange.Stairs, RoomLevelChange.CurvedWall)]
+        [Tooltip("How much higher the exit floor is than the entrance floor. Ignored when Level Change is None. A Wall Jump Shaft takes 0 to 6.")]
+        [ShowIf(nameof(levelChange), RoomLevelChange.Stairs, RoomLevelChange.CurvedWall, RoomLevelChange.WallJumpShaft)]
         [SerializeField, Range(0f, 24f)] private float exitRise;
 
         //==================== CONTROL AND VISIBILITY =====================
@@ -160,6 +162,51 @@ namespace TheSpaceBetween
         [Tooltip("The exit door seals while the camera sees the player, and reopens shortly after. Needs a door at the exit.")]
         [ShowIf(nameof(securityCamera))]
         [SerializeField] private bool cameraLocksExit;
+
+        //==================== PLATFORMING =====================
+        [Header("Platforming")]
+        [Tooltip("Adds the pieces of a chase route: gaps in the floor, crumbling bridges, low hoods to slide under, falling debris, a restart point and the runaway's path. The Chase Run purpose turns this on.")]
+        [SerializeField] private bool platforming;
+
+        [Tooltip("How many gaps break the floor. Each has a pit below it that restarts the room.")]
+        [ShowIf(nameof(platforming))]
+        [SerializeField, Range(0, 4)] private int floorGaps = 2;
+
+        [Tooltip("Width of each gap in metres. A running jump clears about 7, a walking jump about 4.5.")]
+        [ShowIf(nameof(platforming))]
+        [SerializeField, Range(2f, 7f)] private float gapWidth = 5f;
+
+        [Tooltip("Bridges every gap with a slab that falls away once stood on, so a player who keeps moving has a way across.")]
+        [ShowIf(nameof(platforming))]
+        [SerializeField] private bool crumblingBridges = true;
+
+        [Tooltip("Seconds a crumbling bridge holds after the player steps on it. Running across a 5 m gap takes about 0.5 s.")]
+        [ShowIf(nameof(crumblingBridges))]
+        [SerializeField, Range(0.2f, 2f)] private float crumbleDelay = 0.8f;
+
+        [Tooltip("How many low hoods hang over the route. Their underside is 1.5 m up, so the player has to slide under.")]
+        [ShowIf(nameof(platforming))]
+        [SerializeField, Range(0, 2)] private int slideHoods;
+
+        [Tooltip("Length of each hood along the route, in metres.")]
+        [ShowIf(nameof(platforming))]
+        [SerializeField, Range(3f, 10f)] private float hoodLength = 6f;
+
+        [Tooltip("How many points drop falling debris across the route on a steady rhythm. Debris that hits the player restarts the room. They sit over gaps first.")]
+        [ShowIf(nameof(platforming))]
+        [SerializeField, Range(0, 3)] private int debrisDrops;
+
+        [Tooltip("Seconds between drops at each debris point.")]
+        [ShowIf(nameof(platforming))]
+        [SerializeField, Range(0.8f, 5f)] private float debrisInterval = 2f;
+
+        [Tooltip("Adds a Room Reset over the room, with its entry point at the entrance, so falling or being hit restarts this room only. Pits and debris need one.")]
+        [ShowIf(nameof(platforming))]
+        [SerializeField] private bool roomRestart = true;
+
+        [Tooltip("Adds the runaway's path through the room as Chase Path Points. A Chase Target in the scene follows the points of every room in order.")]
+        [ShowIf(nameof(platforming))]
+        [SerializeField] private bool chasePath = true;
 
         //==================== LIGHTING =====================
         [Header("Lighting")]
@@ -269,6 +316,17 @@ namespace TheSpaceBetween
         public bool SecurityCamera => securityCamera;
         public float CameraPosition => cameraPosition;
         public bool CameraLocksExit => cameraLocksExit;
+        public bool Platforming => platforming;
+        public int FloorGaps => platforming ? floorGaps : 0;
+        public float GapWidth => gapWidth;
+        public bool CrumblingBridges => platforming && crumblingBridges;
+        public float CrumbleDelay => crumbleDelay;
+        public int SlideHoods => platforming ? slideHoods : 0;
+        public float HoodLength => hoodLength;
+        public int DebrisDrops => platforming ? debrisDrops : 0;
+        public float DebrisInterval => debrisInterval;
+        public bool RoomRestart => platforming && roomRestart;
+        public bool ChasePath => platforming && chasePath;
         public RoomLightingMode LightingMode => lightingMode;
         public bool CeilingFixtures => ceilingFixtures;
         public bool WallFixtures => wallFixtures;
@@ -379,7 +437,37 @@ namespace TheSpaceBetween
                     SetControl(false, 1, 3f, false, 0, 1, 1);
                     ApplyLighting(RoomLightingMode.FunctionalInstitutional);
                     break;
+
+                // A stretch of a chase: the floor is failing, so the player keeps moving or falls.
+                case RoomPurpose.ChaseRun:
+                    SetShape(48f, 10f, 5f, 1f, 8f, 0.6f, true);
+                    SetFinish(RoomFinish.Concrete, RoomFinish.Concrete, RoomFinish.ConcreteSlate);
+                    SetCirculation(RoomThreshold.Framed, RoomThreshold.Framed, 0, RoomLevelChange.None, 0f);
+                    // The gaps and the hood are its obstacles, so it has no low barrier to crowd them.
+                    SetControl(false, 1, 3f, false, 0, 1, 2);
+                    SetPlatforming(2, 5f, true, 0.8f, 1, 6f, 0, 2f);
+                    ApplyLighting(RoomLightingMode.SparseFailed);
+                    break;
             }
+        }
+
+        /// <summary>
+        /// Sets the platforming pieces and turns platforming on, with a restart point and the runaway's path. The Chase Run
+        /// purpose uses it, and so can a script that lays out a chase.
+        /// </summary>
+        public void SetPlatforming(int gaps, float gapSize, bool bridges, float delay, int hoods, float hoodSize, int debris, float interval)
+        {
+            platforming = true;
+            floorGaps = gaps;
+            gapWidth = gapSize;
+            crumblingBridges = bridges;
+            crumbleDelay = delay;
+            slideHoods = hoods;
+            hoodLength = hoodSize;
+            debrisDrops = debris;
+            debrisInterval = interval;
+            roomRestart = true;
+            chasePath = true;
         }
 
         /// <summary>Loads the starting lighting values for a mode. Custom changes nothing.</summary>
@@ -448,6 +536,7 @@ namespace TheSpaceBetween
             lowBarriers = barriers;
             recessedBays = recesses;
             repairPanels = panels;
+            platforming = false;
         }
 
         private void SetLighting(bool ceiling, bool wall, int everyBays, float level, float fill, Color color, float angle, int shadows, float failed, float variation, float gallery)

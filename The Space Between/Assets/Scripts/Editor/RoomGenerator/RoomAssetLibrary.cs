@@ -33,7 +33,8 @@ namespace TheSpaceBetween.EditorTools
             { RoomPrefab.ControlPanel, EnvironmentFolder + "Control Panel.prefab" },
             { RoomPrefab.GlassPartition, EnvironmentFolder + "Glass Partition.prefab" },
             { RoomPrefab.IndustrialBarrier, EnvironmentFolder + "Industrial Barrier.prefab" },
-            { RoomPrefab.SecurityCamera, EnvironmentFolder + "Security Camera.prefab" }
+            { RoomPrefab.SecurityCamera, EnvironmentFolder + "Security Camera.prefab" },
+            { RoomPrefab.FallingObstacleSpawner, "Assets/Prefabs/Traversal/Falling Obstacle Spawner.prefab" }
         };
 
         public static Material Load(RoomMaterial material)

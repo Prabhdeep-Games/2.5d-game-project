@@ -33,7 +33,8 @@ namespace TheSpaceBetween.EditorTools
             { RoomGroup.Systems, "Generated_Systems" },
             { RoomGroup.LightFixtures, "Generated_LightFixtures" },
             { RoomGroup.LightSources, "Generated_LightSources" },
-            { RoomGroup.ReflectionProbes, "Generated_ReflectionProbes" }
+            { RoomGroup.ReflectionProbes, "Generated_ReflectionProbes" },
+            { RoomGroup.Chase, "Generated_Chase" }
         };
 
         //==================== GENERATE =====================
@@ -264,6 +265,7 @@ namespace TheSpaceBetween.EditorTools
             }
 
             WirePrefabs(MakePrefabs(plan, origin, GroupFor, made), settings);
+            MakeChasePieces(plan, origin, GroupFor, made);
 
             if (plan.CameraExtraDistance > 0f)
             {
@@ -293,7 +295,7 @@ namespace TheSpaceBetween.EditorTools
             return go.transform;
         }
 
-        private static void MakeBlock(BlockPlan plan, Vector3 origin, Transform parent, List<GameObject> made)
+        private static GameObject MakeBlock(BlockPlan plan, Vector3 origin, Transform parent, List<GameObject> made)
         {
             Transform t = NewChild(plan.Name, parent, made);
             t.position = origin + plan.Center;
@@ -304,6 +306,7 @@ namespace TheSpaceBetween.EditorTools
             so.FindProperty("size").vector3Value = plan.Size;
             so.FindProperty("solid").boolValue = plan.Solid;
             so.ApplyModifiedPropertiesWithoutUndo();
+            return go;
         }
 
         private static void MakeCurve(CurvePlan plan, RoomPlan room, Vector3 origin, Transform parent, List<GameObject> made)
@@ -323,7 +326,7 @@ namespace TheSpaceBetween.EditorTools
             so.FindProperty("width").floatValue = plan.Width;
             so.FindProperty("thickness").floatValue = plan.Thickness;
             so.FindProperty("segments").intValue = RoomLayout.CurveSegmentCount;
-            so.FindProperty("mirror").boolValue = false;
+            so.FindProperty("mirror").boolValue = plan.Mirror;
             so.ApplyModifiedPropertiesWithoutUndo();
 
             // Rebuilt now rather than on the delayed validation, so the fill below matches the final shape at once.
@@ -437,15 +440,90 @@ namespace TheSpaceBetween.EditorTools
             }
         }
 
+        //==================== PLATFORMING =====================
+        // The restart comes first, so the room's slabs, pit hazards and debris can be connected to it.
+        private static void MakeChasePieces(RoomPlan plan, Vector3 origin, System.Func<RoomGroup, Transform> groupFor, List<GameObject> made)
+        {
+            RoomReset restart = plan.Restart != null ? MakeRestart(plan, origin, groupFor(RoomGroup.Chase), made) : null;
+
+            foreach (CrumblePlan crumble in plan.Crumbles)
+            {
+                GameObject slab = MakeBlock(crumble.Block, origin, groupFor(crumble.Block.Group), made);
+                var so = new SerializedObject(slab.AddComponent<CrumblingSlab>());
+                so.FindProperty("crumbleDelay").floatValue = crumble.Delay;
+                so.FindProperty("room").objectReferenceValue = restart;
+                so.ApplyModifiedPropertiesWithoutUndo();
+            }
+
+            foreach (VolumePlan hazard in plan.Hazards)
+            {
+                GameObject trigger = MakeTrigger(hazard, origin, groupFor(RoomGroup.Chase), made);
+                var so = new SerializedObject(trigger.AddComponent<TraversalHazard>());
+                so.FindProperty("room").objectReferenceValue = restart;
+                so.ApplyModifiedPropertiesWithoutUndo();
+            }
+
+            foreach (DebrisPlan debris in plan.Debris)
+            {
+                var spawner = (GameObject)PrefabUtility.InstantiatePrefab(RoomAssetLibrary.Load(RoomPrefab.FallingObstacleSpawner), groupFor(RoomGroup.Chase));
+                spawner.name = "Falling Debris";
+                spawner.transform.position = origin + debris.Position;
+                made.Add(spawner);
+                var so = new SerializedObject(spawner.GetComponent<FallingObstacleSpawner>());
+                so.FindProperty("interval").floatValue = debris.Interval;
+                so.FindProperty("initialDelay").floatValue = debris.InitialDelay;
+                so.FindProperty("destroyHeight").floatValue = origin.y + debris.DestroyHeight;
+                so.FindProperty("room").objectReferenceValue = restart;
+                so.ApplyModifiedPropertiesWithoutUndo();
+            }
+
+            for (int i = 0; i < plan.PathPoints.Count; i++)
+            {
+                PathPointPlan point = plan.PathPoints[i];
+                Transform t = NewChild("Chase Point " + (i + 1), groupFor(RoomGroup.Chase), made);
+                t.position = origin + point.Position;
+                var so = new SerializedObject(t.gameObject.AddComponent<ChasePathPoint>());
+                so.FindProperty("blink").boolValue = point.Blink;
+                so.FindProperty("roomStart").boolValue = point.RoomStart;
+                so.ApplyModifiedPropertiesWithoutUndo();
+            }
+        }
+
+        private static RoomReset MakeRestart(RoomPlan plan, Vector3 origin, Transform parent, List<GameObject> made)
+        {
+            GameObject area = MakeTrigger(plan.Restart, origin, parent, made);
+            Transform entry = NewChild("Entry Point", area.transform, made);
+            entry.position = origin + plan.RestartEntry;
+            var reset = area.AddComponent<RoomReset>();
+            var so = new SerializedObject(reset);
+            so.FindProperty("entryPoint").objectReferenceValue = entry;
+            so.ApplyModifiedPropertiesWithoutUndo();
+            return reset;
+        }
+
+        // Every room trigger sits on Ignore Raycast, so it cannot block the swap's sight line.
+        private static GameObject MakeTrigger(VolumePlan plan, Vector3 origin, Transform parent, List<GameObject> made)
+        {
+            Transform t = NewChild(plan.Name, parent, made);
+            t.gameObject.layer = IgnoreRaycastLayer;
+            t.position = origin + plan.Center;
+            var box = t.gameObject.AddComponent<BoxCollider>();
+            box.isTrigger = true;
+            box.size = plan.Size;
+            return t.gameObject;
+        }
+
         // The trigger sits on Ignore Raycast, as every other room trigger does, so it cannot block the swap's sight line.
         private static void MakeCameraZone(RoomPlan plan, RoomSettings settings, Vector3 origin, Transform parent, List<GameObject> made)
         {
+            // A shaft or pit below the floor is part of the room the camera has to take in.
             Transform t = NewChild("Camera Zone", parent, made);
             t.gameObject.layer = IgnoreRaycastLayer;
-            t.position = origin + new Vector3(settings.Width * 0.5f, settings.Height * 0.5f, 0f);
+            float bottom = -plan.BelowFloor;
+            t.position = origin + new Vector3(settings.Width * 0.5f, (bottom + settings.Height) * 0.5f, 0f);
             var box = t.gameObject.AddComponent<BoxCollider>();
             box.isTrigger = true;
-            box.size = new Vector3(settings.Width, settings.Height, CameraZoneDepth);
+            box.size = new Vector3(settings.Width, settings.Height - bottom, CameraZoneDepth);
             var so = new SerializedObject(t.gameObject.AddComponent<CameraZone>());
             so.FindProperty("extraDistance").floatValue = plan.CameraExtraDistance;
             so.ApplyModifiedPropertiesWithoutUndo();

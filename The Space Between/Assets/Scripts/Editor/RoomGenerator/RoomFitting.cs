@@ -14,6 +14,7 @@ namespace TheSpaceBetween.EditorTools
         private const float MaximumHeight = 40f;
         private const float DefaultStairRise = 4f;
         private const float DefaultCurveRise = 12f;
+        private const float DefaultShaftRise = 4f;
         private const int MaximumSteps = 12;
 
         /// <summary>Adjusts the values after an edit and returns what it changed. Empty when nothing was needed.</summary>
@@ -42,7 +43,8 @@ namespace TheSpaceBetween.EditorTools
             }
         }
 
-        // A level change with no rise, or a curve outside the rise its wall run is tuned for, would not work.
+        // A level change with no rise, a curve outside the rise its wall run is tuned for, or a shaft whose exit is out of
+        // jumping reach, would not work.
         private static void FitExitRise(RoomSettings values, RoomSettings before, List<string> changes)
         {
             if (values.LevelChange == before.LevelChange)
@@ -58,6 +60,10 @@ namespace TheSpaceBetween.EditorTools
             else if (values.LevelChange == RoomLevelChange.CurvedWall && (rise < RoomLayout.CurveMinimumRise || rise > RoomLayout.CurveMaximumRise))
             {
                 rise = rise <= 0f ? DefaultCurveRise : Mathf.Clamp(rise, RoomLayout.CurveMinimumRise, RoomLayout.CurveMaximumRise);
+            }
+            else if (values.LevelChange == RoomLevelChange.WallJumpShaft && rise > RoomLayout.ShaftMaximumRise)
+            {
+                rise = DefaultShaftRise;
             }
 
             if (rise != values.ExitRise)

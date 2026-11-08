@@ -52,6 +52,12 @@ namespace TheSpaceBetween
 
         public bool PlayerInside => playerInside;
 
+        /// <summary>The room's area in world space.</summary>
+        public Bounds Area => (area != null ? area : GetComponent<BoxCollider>()).bounds;
+
+        /// <summary>Raised after the room has been reset, for things that put themselves back, such as crumbling slabs.</summary>
+        public event System.Action WasReset;
+
         /// <summary>The first active room reset whose area contains a point, or null.</summary>
         public static RoomReset FindContaining(Vector3 point)
         {
@@ -70,17 +76,29 @@ namespace TheSpaceBetween
         //==================== LIFECYCLE =====================
         private void Reset()
         {
-            resetAction = new InputAction("Reset Room", InputActionType.Button, "<Keyboard>/r");
-            resetAction.AddBinding("<Gamepad>/select");
+            resetAction = new InputAction("Reset Room", InputActionType.Button);
+            AddDefaultBindings();
 
             area = GetComponent<BoxCollider>();
             area.isTrigger = true;
             gameObject.layer = LayerMask.NameToLayer("Ignore Raycast");
         }
 
+        private void AddDefaultBindings()
+        {
+            resetAction.AddBinding("<Keyboard>/r");
+            resetAction.AddBinding("<Gamepad>/select");
+        }
+
         private void Awake()
         {
             area = GetComponent<BoxCollider>();
+
+            // A Room Reset added by a script, such as the Room Generator, starts with no bindings.
+            if (resetAction.bindings.Count == 0)
+            {
+                AddDefaultBindings();
+            }
 
             if (player == null)
             {
@@ -168,6 +186,7 @@ namespace TheSpaceBetween
             }
 
             Physics.SyncTransforms();
+            WasReset?.Invoke();
             resetEvent?.Invoke();
 
             if (logResets)

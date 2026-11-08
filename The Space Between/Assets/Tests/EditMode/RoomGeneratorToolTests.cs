@@ -548,6 +548,8 @@ namespace TheSpaceBetween.Tests
             yield return ("Observation Gallery", s => Set(s, "observationGallery", true));
             yield return ("Camera Locks Exit", s => { Set(s, "securityCamera", true); Set(s, "cameraLocksExit", true); });
             yield return ("Two Low Barriers", s => Set(s, "lowBarriers", 2));
+            yield return ("Wall Jump Shaft", s => Set(s, "levelChange", RoomLevelChange.WallJumpShaft));
+            yield return ("Gaps and a Hood", s => { Set(s, "platforming", true); Set(s, "floorGaps", 2); Set(s, "slideHoods", 1); });
         }
 
         [Test]

@@ -23,7 +23,8 @@ namespace TheSpaceBetween.EditorTools
         ControlPanel,
         GlassPartition,
         IndustrialBarrier,
-        SecurityCamera
+        SecurityCamera,
+        FallingObstacleSpawner
     }
 
     /// <summary>The named groups a generated room's objects are sorted into.</summary>
@@ -36,7 +37,8 @@ namespace TheSpaceBetween.EditorTools
         Systems,
         LightFixtures,
         LightSources,
-        ReflectionProbes
+        ReflectionProbes,
+        Chase
     }
 
     /// <summary>One <see cref="ArchitecturalBlock"/>, relative to the room's position.</summary>
@@ -74,6 +76,67 @@ namespace TheSpaceBetween.EditorTools
 
         /// <summary>Material of the fill under the curve, which follows the curve's underside exactly.</summary>
         public RoomMaterial FillMaterial;
+
+        /// <summary>True when the curve rises toward the entrance instead of the exit, as the near wall of a shaft does.</summary>
+        public bool Mirror;
+    }
+
+    /// <summary>One <see cref="CrumblingSlab"/>: a block that falls away once stood on.</summary>
+    public sealed class CrumblePlan
+    {
+        public BlockPlan Block;
+        public float Delay;
+    }
+
+    /// <summary>A trigger box, relative to the room's position, such as a pit's hazard.</summary>
+    public sealed class VolumePlan
+    {
+        public string Name;
+        public Vector3 Min;
+        public Vector3 Max;
+
+        public Vector3 Center => (Min + Max) * 0.5f;
+
+        public Vector3 Size => Max - Min;
+    }
+
+    /// <summary>A falling debris point, relative to the room's position.</summary>
+    public sealed class DebrisPlan
+    {
+        public Vector3 Position;
+        public float Interval;
+        public float InitialDelay;
+
+        /// <summary>Height below which the debris is removed, relative to the room's entrance floor.</summary>
+        public float DestroyHeight;
+    }
+
+    /// <summary>One <see cref="ChasePathPoint"/>, relative to the room's position.</summary>
+    public sealed class PathPointPlan
+    {
+        public Vector3 Position;
+        public bool Blink;
+        public bool RoomStart;
+    }
+
+    /// <summary>A stretch of the route, from one distance along the room to another.</summary>
+    public struct RouteSpan
+    {
+        public float Start;
+        public float End;
+
+        public RouteSpan(float start, float end)
+        {
+            Start = start;
+            End = end;
+        }
+
+        public float Length => End - Start;
+
+        public bool Contains(float x)
+        {
+            return x >= Start && x < End;
+        }
     }
 
     /// <summary>One existing prefab, relative to the room's position.</summary>
@@ -111,6 +174,29 @@ namespace TheSpaceBetween.EditorTools
         public readonly List<CurvePlan> Curves = new List<CurvePlan>();
         public readonly List<PrefabPlan> Prefabs = new List<PrefabPlan>();
         public readonly List<LightPlan> Lights = new List<LightPlan>();
+
+        public readonly List<CrumblePlan> Crumbles = new List<CrumblePlan>();
+        public readonly List<VolumePlan> Hazards = new List<VolumePlan>();
+        public readonly List<DebrisPlan> Debris = new List<DebrisPlan>();
+        public readonly List<PathPointPlan> PathPoints = new List<PathPointPlan>();
+
+        /// <summary>The room's Room Reset area, or null when the room has none.</summary>
+        public VolumePlan Restart;
+
+        /// <summary>Where the Room Reset puts the player back: the standing point, relative to the room.</summary>
+        public Vector3 RestartEntry;
+
+        /// <summary>Gaps in the floor the route has to jump, or cross on a crumbling bridge.</summary>
+        public readonly List<RouteSpan> Gaps = new List<RouteSpan>();
+
+        /// <summary>Stretches under a low hood, which the player has to slide through.</summary>
+        public readonly List<RouteSpan> SlideSpans = new List<RouteSpan>();
+
+        /// <summary>A wall jump shaft the route climbs out of, or null.</summary>
+        public RouteSpan? Shaft;
+
+        /// <summary>How far below the entrance floor the room reaches, for a pit or a shaft. The camera has to see it.</summary>
+        public float BelowFloor;
 
         /// <summary>Problems that stop the room being built.</summary>
         public readonly List<string> Errors = new List<string>();

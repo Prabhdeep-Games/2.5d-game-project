@@ -45,6 +45,50 @@ namespace TheSpaceBetween.EditorTools
         private const float CurveHeadroom = 1.5f;
         private const int CurveSegments = 24;
 
+        // Wall jump shaft, measured from the half-pipe in animation_Trial, whose wall jumps are tested in Play Mode: two
+        // curves 6 apart, the entrance 14 above the shaft floor, a cap that stops the wall run on the far side, and a hood
+        // over the drop that keeps a jump from clearing the shaft in one go.
+        private const float ShaftRadius = 3f;
+        private const float ShaftThickness = 0.6f;
+        private const float ShaftDepth = 14f;
+        private const float ShaftExitLedge = 6f;
+        private const float ShaftRunUp = 6f;
+        public const float ShaftMaximumRise = 6f;
+        private const float ShaftCapWidth = 1.2f;
+        private const float ShaftCapThickness = 0.6f;
+        private const float ShaftCapBelowExit = 5f;
+        private const float DropHoodBottom = 3f;
+        private const float DropHoodTop = 6f;
+        private const float DropHoodBefore = 2f;
+        private const float DropHoodAfter = 2.2f;
+        private const float ShaftHoodClearance = 1f;
+
+        // Platforming. A running jump clears about 7.6 and a slide needs 1.0 of headroom, both measured in Play Mode.
+        private const float PitDepth = FloorThickness;
+        private const float PitFloorThickness = 1f;
+        private const float HazardTop = -2f;
+        private const float HazardBottom = -3.5f;
+        private const float BridgeThickness = 0.5f;
+        private const float HoodBottom = 1.5f;
+        private const float HoodThickness = 3f;
+        private const float HoodBelowBeam = 0.05f;
+        private const float HoodMinimumThickness = 1f;
+        private const float HoodBackGap = 0.05f;
+        private const float PlatformingEntryClearance = 8f;
+        private const float PlatformingExitClearance = 5f;
+        private const float PieceSpacing = 4f;
+        private const float PieceLineClearance = 1.5f;
+        private const float RouteHalfDepth = 2f;
+        private const float EntryInset = 1.5f;
+        private const float RestartBelow = 2f;
+        private const float DebrisBelowCeiling = 1.5f;
+        private const float DebrisFloorClearance = 0.5f;
+        private const float DebrisFirstDelay = 0.5f;
+        private const float PathHover = 1f;
+        private const float PathEdge = 1.5f;
+        private const float PathRoomStart = 3f;
+        private const float PathBarrierStep = 1.2f;
+
         // Architectural details.
         private const float BeamDepth = 0.8f;
         private const float LintelDepth = 0.35f;
@@ -121,6 +165,10 @@ namespace TheSpaceBetween.EditorTools
         private RoomLevelChange levelChange;
         private float rise;
         private float flatEnd;
+        private float runUp;
+        private readonly List<RouteSpan> gaps = new List<RouteSpan>();
+        private readonly List<RouteSpan> hoods = new List<RouteSpan>();
+        private readonly List<float> barrierXs = new List<float>();
         private readonly HashSet<int> crossWallLines = new HashSet<int>();
         private readonly HashSet<int> windowBays = new HashSet<int>();
         private readonly HashSet<int> recessBays = new HashSet<int>();
@@ -157,6 +205,7 @@ namespace TheSpaceBetween.EditorTools
             }
 
             DecideBays();
+            DecidePlatforming();
             AddFloorAndCeiling();
             AddLevelChange();
             AddEndWalls();
@@ -167,6 +216,7 @@ namespace TheSpaceBetween.EditorTools
             AddBarriers();
             AddPartition();
             AddSecurityCamera();
+            AddPlatforming();
             AddCeilingFixtures();
             AddWallFixtures();
             AddFill();
@@ -179,13 +229,15 @@ namespace TheSpaceBetween.EditorTools
         {
             levelChange = settings.LevelChange;
             rise = levelChange == RoomLevelChange.None ? 0f : settings.ExitRise;
-            if (levelChange != RoomLevelChange.None && rise <= 0f)
+
+            // A shaft climbs out of its own pit, so it works with the exit level with the entrance too.
+            if (levelChange != RoomLevelChange.None && levelChange != RoomLevelChange.WallJumpShaft && rise <= 0f)
             {
                 levelChange = RoomLevelChange.None;
                 plan.Notes.Add("Level Change is set, but Exit Rise is 0, so the floor stays level.");
             }
 
-            float runUp = 0f;
+            runUp = 0f;
             float needed = 0f;
             switch (levelChange)
             {
@@ -209,6 +261,18 @@ namespace TheSpaceBetween.EditorTools
                     runUp = CurveRunUp;
                     flatEnd = width - wall - needed;
                     break;
+
+                case RoomLevelChange.WallJumpShaft:
+                    if (rise < 0f || rise > ShaftMaximumRise)
+                    {
+                        plan.Errors.Add($"A wall jump shaft needs an Exit Rise from 0 to {ShaftMaximumRise}, the range its wall jumps are tuned for.");
+                    }
+
+                    needed = ShaftWidth + ShaftExitLedge;
+                    runUp = ShaftRunUp;
+                    flatEnd = width - wall - needed;
+                    plan.BelowFloor = ShaftDepth + FloorThickness;
+                    break;
             }
 
             if (levelChange != RoomLevelChange.None)
@@ -229,6 +293,24 @@ namespace TheSpaceBetween.EditorTools
                 plan.Errors.Add($"The ceiling is too low for the exit: Height needs to be at least {rise + opening + headroom}.");
             }
 
+            // The hood over the drop has to fit under the beams.
+            if (levelChange == RoomLevelChange.WallJumpShaft)
+            {
+                float shaftHeight = DropHoodTop + ShaftHoodClearance + BeamDepth;
+                plan.NeededHeight = Mathf.Max(plan.NeededHeight, shaftHeight);
+                if (height < shaftHeight)
+                {
+                    plan.Errors.Add($"The ceiling is too low for the hood over the shaft: Height needs to be at least {shaftHeight}.");
+                }
+            }
+
+            // A low hood has to hang under the beams with some body to it.
+            if (settings.SlideHoods > 0)
+            {
+                float hoodHeight = HoodBottom + HoodMinimumThickness + BeamDepth + HoodBelowBeam;
+                plan.NeededHeight = Mathf.Max(plan.NeededHeight, hoodHeight);
+            }
+
             if (height < EffectiveOpening(settings.Entrance))
             {
                 plan.Errors.Add($"The ceiling is lower than the entrance: Height needs to be at least {EffectiveOpening(settings.Entrance)}.");
@@ -240,8 +322,13 @@ namespace TheSpaceBetween.EditorTools
             }
 
             plan.ExitOffset = new Vector3(width, rise, 0f);
-            plan.CameraExtraDistance = Mathf.Clamp(height - CameraClearHeight, 0f, CameraMaximumExtra);
+
+            // The camera has to take in a shaft below the floor as well as the room above it.
+            float seen = height + (levelChange == RoomLevelChange.WallJumpShaft ? ShaftDepth : 0f);
+            plan.CameraExtraDistance = Mathf.Clamp(seen - CameraClearHeight, 0f, CameraMaximumExtra);
         }
+
+        private static float ShaftWidth => (ShaftRadius + ShaftThickness) * 2f;
 
         private void DecideBays()
         {
@@ -319,6 +406,120 @@ namespace TheSpaceBetween.EditorTools
                 plan.MissingPieces += recesses;
                 plan.Notes.Add($"{recesses} recess(es) did not fit, because no free bays were left.");
             }
+        }
+
+        // Gaps and hoods alternate, gaps first, spread evenly over the flat floor so the rhythm reads. The run up to a level
+        // change stays clear, and nothing lands on a cross wall, the glass or under the camera. Pieces that do not fit are
+        // counted as missing, so Making Room can lengthen the room for them.
+        private void DecidePlatforming()
+        {
+            var pieces = new List<bool>();
+            int gapsLeft = settings.FloorGaps;
+            int hoodsLeft = settings.SlideHoods;
+            while (gapsLeft > 0 || hoodsLeft > 0)
+            {
+                if (gapsLeft-- > 0)
+                {
+                    pieces.Add(true);
+                }
+
+                if (hoodsLeft-- > 0)
+                {
+                    pieces.Add(false);
+                }
+            }
+
+            if (pieces.Count == 0)
+            {
+                return;
+            }
+
+            float start = wall + PlatformingEntryClearance;
+            float end = flatEnd - Mathf.Max(PlatformingExitClearance, runUp);
+            int placed = pieces.Count;
+            while (placed > 0 && !TryPlacePieces(pieces, placed, start, end))
+            {
+                placed--;
+            }
+
+            int missing = pieces.Count - placed;
+            if (missing > 0)
+            {
+                plan.MissingPieces += missing;
+                plan.Notes.Add($"Only {placed} of {pieces.Count} gaps and hoods fit on the flat floor. Use a longer room.");
+            }
+        }
+
+        private bool TryPlacePieces(List<bool> pieces, int count, float start, float end)
+        {
+            var placedGaps = new List<RouteSpan>();
+            var placedHoods = new List<RouteSpan>();
+            float previousEnd = float.NegativeInfinity;
+            for (int i = 0; i < count; i++)
+            {
+                bool isGap = pieces[i];
+                float length = isGap ? settings.GapWidth : settings.HoodLength;
+                float center = start + (end - start) * (i + 0.5f) / count;
+                if (!TryFindSpot(center, length, isGap, start, end, previousEnd, out RouteSpan span))
+                {
+                    return false;
+                }
+
+                (isGap ? placedGaps : placedHoods).Add(span);
+                previousEnd = span.End;
+            }
+
+            gaps.Clear();
+            gaps.AddRange(placedGaps);
+            hoods.Clear();
+            hoods.AddRange(placedHoods);
+            return true;
+        }
+
+        // Tries the even position first, then nudges it by half metres either way, far enough to step past a cross wall even
+        // in a room of narrow bays.
+        private bool TryFindSpot(float center, float length, bool isGap, float start, float end, float previousEnd, out RouteSpan span)
+        {
+            float reach = Mathf.Max(bay * 0.5f, length * 0.5f + PieceLineClearance);
+            for (float nudge = 0f; nudge <= reach; nudge += 0.5f)
+            {
+                foreach (float sign in new[] { 1f, -1f })
+                {
+                    float middle = center + nudge * sign;
+                    span = new RouteSpan(middle - length * 0.5f, middle + length * 0.5f);
+                    if (span.Start >= start && span.End <= end && span.Start >= previousEnd + PieceSpacing && SpotIsFree(span, isGap))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            span = default;
+            return false;
+        }
+
+        private bool SpotIsFree(RouteSpan span, bool isGap)
+        {
+            foreach (int line in crossWallLines)
+            {
+                if (Overlaps(span, line * bay, PieceLineClearance))
+                {
+                    return false;
+                }
+            }
+
+            if (partitionLine >= 0 && Overlaps(span, partitionLine * bay, PieceLineClearance))
+            {
+                return false;
+            }
+
+            // A camera hangs where a hood would be.
+            return isGap || cameraBay < 0 || span.End <= cameraBay * bay || span.Start >= (cameraBay + 1) * bay;
+        }
+
+        private static bool Overlaps(RouteSpan span, float x, float clearance)
+        {
+            return x > span.Start - clearance && x < span.End + clearance;
         }
 
         // A recess beside the window reaches back to where the gallery's side wall is, unless it stays below the gallery.
@@ -409,15 +610,35 @@ namespace TheSpaceBetween.EditorTools
             if (levelChange == RoomLevelChange.CurvedWall)
             {
                 float ledgeStart = flatEnd + CurveRadius + CurveThickness;
-                Block("Floor", RoomGroup.Structure, 0f, flatEnd, -FloorThickness, 0f, FrontZ, floorBack, floor, true);
+                AddFloor(0f, flatEnd, floor, floorBack);
                 Block("Floor Under Ledge", RoomGroup.Structure, ledgeStart, width, -FloorThickness, 0f, FrontZ, floorBack, floor, true);
+            }
+            else if (levelChange == RoomLevelChange.WallJumpShaft)
+            {
+                // The shaft has its own floor far below, and the exit ledge stands on it.
+                AddFloor(0f, flatEnd, floor, floorBack);
             }
             else
             {
-                Block("Floor", RoomGroup.Structure, 0f, width, -FloorThickness, 0f, FrontZ, floorBack, floor, true);
+                AddFloor(0f, width, floor, floorBack);
             }
 
             Block("Ceiling", RoomGroup.Structure, 0f, width, height, height + wall, FrontZ, backZ + wall, ceiling, true);
+        }
+
+        // The floor slab, broken by each gap. Without gaps it is one block called Floor, as before.
+        private void AddFloor(float x0, float x1, RoomMaterial floor, float floorBack)
+        {
+            float cursor = x0;
+            int part = 1;
+            foreach (RouteSpan gap in gaps)
+            {
+                Block(part == 1 ? "Floor" : "Floor " + part, RoomGroup.Structure, cursor, gap.Start, -FloorThickness, 0f, FrontZ, floorBack, floor, true);
+                cursor = gap.End;
+                part++;
+            }
+
+            Block(part == 1 ? "Floor" : "Floor " + part, RoomGroup.Structure, cursor, x1, -FloorThickness, 0f, FrontZ, floorBack, floor, true);
         }
 
         private void AddLevelChange()
@@ -455,6 +676,64 @@ namespace TheSpaceBetween.EditorTools
                     FillMaterial = floor
                 });
             }
+            else if (levelChange == RoomLevelChange.WallJumpShaft)
+            {
+                AddShaft(floor);
+            }
+        }
+
+        // The route drops from the entrance floor into the shaft, runs up the far wall until the cap stops it, wall jumps to
+        // the near wall, then jumps back over the cap to the exit ledge. Both walls start from a curve at the bottom.
+        private void AddShaft(RoomMaterial floor)
+        {
+            RoomMaterial finish = (RoomMaterial)settings.WallFinish;
+            float center = flatEnd + ShaftRadius + ShaftThickness;
+            float shaftEnd = ShaftEnd();
+            float bottom = -ShaftDepth;
+            float footing = bottom - FloorThickness;
+
+            Block("Shaft Floor", RoomGroup.LevelChange, flatEnd, shaftEnd, footing, bottom - ShaftThickness, FrontZ, backZ, floor, true);
+            Block("Shaft Exit Ledge", RoomGroup.LevelChange, shaftEnd, width - wall, footing, rise, FrontZ, backZ, floor, true);
+            // The camera moves back to show the shaft, so the ground under the entrance floor has to read as solid, not a void.
+            Block("Shaft Near Bank", RoomGroup.LevelChange, 0f, flatEnd, footing, -FloorThickness, FrontZ, backZ, floor, true);
+            Block("Shaft Back Wall", RoomGroup.Structure, flatEnd, width - wall, footing, 0f, backZ, backZ + wall, finish, true);
+            Block("Shaft Exit Wall Below", RoomGroup.Openings, width - wall, width, footing, 0f, FrontZ, backZ, finish, true);
+            Block("Shaft Cap", RoomGroup.LevelChange, center + ShaftRadius - ShaftCapWidth, center + ShaftRadius, rise - ShaftCapBelowExit - ShaftCapThickness, rise - ShaftCapBelowExit, -RouteHalfDepth, RouteHalfDepth, RoomMaterial.Steel, true);
+            Block("Shaft Drop Hood", RoomGroup.LevelChange, flatEnd - DropHoodBefore, flatEnd + DropHoodAfter, DropHoodBottom, DropHoodTop, WallFrontZ, RouteEdgeZ - HoodBackGap, finish, true);
+
+            float z = (WallFrontZ + backZ) * 0.5f;
+            float wallWidth = backZ - WallFrontZ;
+            plan.Curves.Add(new CurvePlan
+            {
+                Name = "Shaft Near Wall",
+                Position = new Vector3(center, bottom, z),
+                Radius = ShaftRadius,
+                StraightLength = ShaftDepth - ShaftRadius,
+                Width = wallWidth,
+                Thickness = ShaftThickness,
+                EndX = center,
+                FillMaterial = floor,
+                Mirror = true
+            });
+            plan.Curves.Add(new CurvePlan
+            {
+                Name = "Shaft Far Wall",
+                Position = new Vector3(center, bottom, z),
+                Radius = ShaftRadius,
+                StraightLength = ShaftDepth + rise - ShaftRadius,
+                Width = wallWidth,
+                Thickness = ShaftThickness,
+                EndX = shaftEnd,
+                FillMaterial = floor
+            });
+
+            plan.Shaft = new RouteSpan(flatEnd, shaftEnd);
+            AddLight("Shaft Fill Light", LightType.Point, new Vector3(center, bottom * 0.5f, FillZ), settings.FillLevel * FillDistance * FillDistance, FillRange, 0f, false);
+        }
+
+        private float ShaftEnd()
+        {
+            return flatEnd + ShaftWidth;
         }
 
         private void AddEndWalls()
@@ -706,7 +985,7 @@ namespace TheSpaceBetween.EditorTools
             for (int i = 0; i < bayCount; i++)
             {
                 float x = (i + 0.5f) * bay;
-                if (x > BarrierEntryClearance && x < flatEnd - BarrierEntryClearance && !NearThreshold(x) && i != cameraBay)
+                if (x > BarrierEntryClearance && x < flatEnd - BarrierEntryClearance && !NearThreshold(x) && !NearPlatformingPiece(x) && i != cameraBay)
                 {
                     free.Add(i);
                 }
@@ -718,6 +997,7 @@ namespace TheSpaceBetween.EditorTools
                 int pick = random.Next(free.Count);
                 float x = (free[pick] + 0.5f) * bay;
                 free.RemoveAt(pick);
+                barrierXs.Add(x);
                 plan.Prefabs.Add(new PrefabPlan
                 {
                     Prefab = RoomPrefab.IndustrialBarrier,
@@ -746,6 +1026,28 @@ namespace TheSpaceBetween.EditorTools
             }
 
             return partitionLine >= 0 && Mathf.Abs(partitionLine * bay - x) < BarrierThresholdClearance;
+        }
+
+        // A barrier just before a gap leaves no run up for the jump, and one under a hood can be neither jumped nor slid.
+        private bool NearPlatformingPiece(float x)
+        {
+            foreach (RouteSpan span in gaps)
+            {
+                if (Overlaps(span, x, BarrierThresholdClearance))
+                {
+                    return true;
+                }
+            }
+
+            foreach (RouteSpan span in hoods)
+            {
+                if (Overlaps(span, x, BarrierThresholdClearance))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void AddPartition()
@@ -787,6 +1089,194 @@ namespace TheSpaceBetween.EditorTools
         public static bool CameraShouldLockExit(RoomSettings settings)
         {
             return settings.SecurityCamera && settings.CameraLocksExit && (settings.Exit == RoomThreshold.SealedDoor || settings.Exit == RoomThreshold.PanelDoor);
+        }
+
+        //==================== PLATFORMING =====================
+        private void AddPlatforming()
+        {
+            if (!settings.Platforming)
+            {
+                return;
+            }
+
+            AddGaps();
+            AddHoods();
+            AddRestart();
+            AddDebris();
+            if (settings.ChasePath)
+            {
+                AddChasePath();
+            }
+        }
+
+        // Each gap is a pit as deep as the floor slab, with a dark floor and a back so it reads as a hole in the building.
+        private void AddGaps()
+        {
+            RoomMaterial floor = (RoomMaterial)settings.FloorFinish;
+            RoomMaterial finish = (RoomMaterial)settings.WallFinish;
+            float floorBack = backZ + wall + (recessBays.Count > 0 ? RecessDepth + RecessPlate : 0f);
+            for (int i = 0; i < gaps.Count; i++)
+            {
+                RouteSpan gap = gaps[i];
+                string name = "Gap " + (i + 1);
+                Block(name + " Pit Floor", RoomGroup.Structure, gap.Start, gap.End, -PitDepth - PitFloorThickness, -PitDepth, FrontZ, floorBack, RoomMaterial.DeepShadow, true);
+                Block(name + " Pit Back", RoomGroup.Structure, gap.Start, gap.End, -PitDepth, 0f, backZ, floorBack, finish, true);
+                plan.Gaps.Add(gap);
+                plan.Hazards.Add(new VolumePlan
+                {
+                    Name = name + " Pit Hazard",
+                    Min = new Vector3(gap.Start, HazardBottom, -RouteHalfDepth),
+                    Max = new Vector3(gap.End, HazardTop, RouteHalfDepth)
+                });
+
+                if (settings.CrumblingBridges)
+                {
+                    plan.Crumbles.Add(new CrumblePlan
+                    {
+                        Delay = settings.CrumbleDelay,
+                        Block = new BlockPlan
+                        {
+                            Name = name + " Crumbling Bridge",
+                            Group = RoomGroup.Structure,
+                            Min = new Vector3(gap.Start, -BridgeThickness, FrontZ),
+                            Max = new Vector3(gap.End, 0f, backZ),
+                            Material = floor,
+                            Solid = true
+                        }
+                    });
+                }
+            }
+
+            if (gaps.Count > 0)
+            {
+                plan.BelowFloor = Mathf.Max(plan.BelowFloor, PitDepth + PitFloorThickness);
+            }
+        }
+
+        // A low duct across the front of the route. It stops short of the pilasters and beams, so nothing shares a face.
+        private void AddHoods()
+        {
+            RoomMaterial finish = (RoomMaterial)settings.WallFinish;
+            float top = Mathf.Min(HoodBottom + HoodThickness, height - BeamDepth - HoodBelowBeam);
+            for (int i = 0; i < hoods.Count; i++)
+            {
+                RouteSpan hood = hoods[i];
+                Block("Slide Hood " + (i + 1), RoomGroup.Structure, hood.Start, hood.End, HoodBottom, top, WallFrontZ, RouteEdgeZ - HoodBackGap, finish, true);
+                plan.SlideSpans.Add(hood);
+            }
+        }
+
+        private void AddRestart()
+        {
+            if (!settings.RoomRestart)
+            {
+                return;
+            }
+
+            plan.Restart = new VolumePlan
+            {
+                Name = "Room Restart",
+                Min = new Vector3(0f, -plan.BelowFloor - RestartBelow, -RouteHalfDepth - 1f),
+                Max = new Vector3(width, height, RouteHalfDepth + 1f)
+            };
+            plan.RestartEntry = new Vector3(wall + EntryInset, 0f, 0f);
+        }
+
+        // Debris falls into the gaps first, where it continues into the pit, then over the open floor.
+        private void AddDebris()
+        {
+            int wanted = settings.DebrisDrops;
+            var spots = new List<(float x, bool overGap)>();
+            foreach (RouteSpan gap in gaps)
+            {
+                spots.Add(((gap.Start + gap.End) * 0.5f, true));
+            }
+
+            float start = wall + PlatformingEntryClearance;
+            float end = flatEnd - Mathf.Max(PlatformingExitClearance, runUp);
+            for (int i = 0; spots.Count < wanted && i < wanted * 4; i++)
+            {
+                float x = start + (end - start) * (i + 0.5f) / (wanted * 4);
+                if (!InHood(x) && !InGap(x))
+                {
+                    spots.Add((x, false));
+                }
+            }
+
+            for (int i = 0; i < wanted && i < spots.Count; i++)
+            {
+                (float x, bool overGap) = spots[i];
+                plan.Debris.Add(new DebrisPlan
+                {
+                    Position = new Vector3(x, height - DebrisBelowCeiling, 0f),
+                    Interval = settings.DebrisInterval,
+                    InitialDelay = DebrisFirstDelay + settings.DebrisInterval * i / Mathf.Max(wanted, 1),
+                    DestroyHeight = overGap ? -PitDepth : DebrisFloorClearance
+                });
+            }
+
+            if (spots.Count < wanted)
+            {
+                plan.MissingPieces += wanted - spots.Count;
+                plan.Notes.Add($"Only {spots.Count} of {wanted} debris points found open floor.");
+            }
+        }
+
+        // The runaway glides along the route a little above the floor, and blinks across what the player has to jump,
+        // swap or climb past: gaps, the glass, a curved wall and a shaft. It hops barriers.
+        private void AddChasePath()
+        {
+            var points = new List<PathPointPlan> { Point(wall + PathRoomStart, 0f, false, true) };
+            foreach (RouteSpan gap in gaps)
+            {
+                points.Add(Point(gap.Start - PathEdge, 0f, false));
+                points.Add(Point(gap.End + PathEdge, 0f, true));
+            }
+
+            foreach (float x in barrierXs)
+            {
+                points.Add(Point(x - PathBarrierStep, 0f, false));
+                points.Add(Point(x, BarrierHeight, false));
+                points.Add(Point(x + PathBarrierStep, 0f, false));
+            }
+
+            if (partitionLine >= 0)
+            {
+                points.Add(Point(partitionLine * bay - PathEdge, 0f, false));
+                points.Add(Point(partitionLine * bay + PathEdge, 0f, true));
+            }
+
+            switch (levelChange)
+            {
+                case RoomLevelChange.Stairs:
+                    points.Add(Point(flatEnd, 0f, false));
+                    points.Add(Point(LevelChangeEnd(), rise, false));
+                    break;
+                case RoomLevelChange.CurvedWall:
+                case RoomLevelChange.WallJumpShaft:
+                    points.Add(Point(flatEnd - PathEdge, 0f, false));
+                    points.Add(Point(LevelChangeEnd() + PathEdge, rise, true));
+                    break;
+            }
+
+            points.Add(Point(width - wall - PathEdge, rise, false));
+            points.Sort((a, b) => a.Position.x.CompareTo(b.Position.x));
+            plan.PathPoints.AddRange(points);
+        }
+
+        private static PathPointPlan Point(float x, float floorY, bool blink, bool roomStart = false)
+        {
+            return new PathPointPlan { Position = new Vector3(x, floorY + PathHover, 0f), Blink = blink, RoomStart = roomStart };
+        }
+
+        private bool InGap(float x)
+        {
+            return gaps.Exists(span => span.Contains(x));
+        }
+
+        private bool InHood(float x)
+        {
+            return hoods.Exists(span => span.Contains(x));
         }
 
         //==================== LIGHTING =====================
@@ -980,6 +1470,16 @@ namespace TheSpaceBetween.EditorTools
             {
                 plan.Notes.Add("The way up is a wall run: hold Run and the direction, and run up the curve.");
             }
+
+            if (levelChange == RoomLevelChange.WallJumpShaft)
+            {
+                plan.Notes.Add("The way out is a wall jump: drop in, run up the far wall to the cap, jump to the near wall, then jump back over the cap to the exit.");
+            }
+
+            if (gaps.Count > 0 && plan.Restart == null)
+            {
+                plan.Notes.Add("The gaps have no Room Restart, so falling into one leaves the player in the pit. Turn on Room Restart.");
+            }
         }
 
         //==================== HELPERS =====================
@@ -997,6 +1497,8 @@ namespace TheSpaceBetween.EditorTools
                     return flatEnd + Mathf.Ceil(rise / StairRise) * StairTread;
                 case RoomLevelChange.CurvedWall:
                     return flatEnd + CurveRadius + CurveThickness;
+                case RoomLevelChange.WallJumpShaft:
+                    return ShaftEnd();
                 default:
                     return flatEnd;
             }
@@ -1020,6 +1522,11 @@ namespace TheSpaceBetween.EditorTools
             {
                 float steps = Mathf.Ceil(rise / StairRise);
                 return Mathf.Min(rise, (x - flatEnd) / StairTread * (rise / steps));
+            }
+
+            if (levelChange == RoomLevelChange.WallJumpShaft)
+            {
+                return x < ShaftEnd() ? -ShaftDepth : rise;
             }
 
             // A curved wall's own span keeps the room floor. Beyond it is the ledge.
