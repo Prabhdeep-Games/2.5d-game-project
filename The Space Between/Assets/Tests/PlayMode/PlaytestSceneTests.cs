@@ -636,7 +636,9 @@ namespace TheSpaceBetween.Tests
             StringBuilder report = new StringBuilder("session 1: ");
             yield return PlayWholeRoute(report);
             Assert.IsTrue(goal.Reached, "The first session should reach the end. " + report);
-            foreach (string state in new[] { "Idle", "Run", "Jump", "Fall", "Land", "WallRun", "Traverse", "WallJump", "Swap" })
+            // The Protagonist's controller blends idle, walk and run in Locomotion, and shows a swap with the arm and fist
+            // instead of a Swap state.
+            foreach (string state in new[] { "Locomotion", "Jump", "Fall", "Land", "WallRun", "Traverse", "WallJump" })
             {
                 Assert.IsTrue(statesSeen.Contains(state), $"The Animator should have played {state}. Seen: {string.Join(", ", statesSeen)}. " + report);
             }

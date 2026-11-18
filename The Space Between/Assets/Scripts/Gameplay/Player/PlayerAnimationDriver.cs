@@ -18,6 +18,7 @@ namespace TheSpaceBetween
     ///   Jump, WallJump, Swap
     ///   Land      a landing at least Min Landing Speed hard
     ///   HardLand  such a landing after a fall of at least Hard Landing Height, played as the roll
+    /// The roll carries the player forward with the roll clip's own motion (RollRootMotion, added to the Animator's object).
     ///
     /// Put this on the player, next to the PlaceholderPlayerController. The Animator sits on the Body child.
     /// </summary>
@@ -113,6 +114,18 @@ namespace TheSpaceBetween
         private void Start()
         {
             hasRollState = animatorReady && animator.HasState(0, Animator.StringToHash(animator.GetLayerName(0) + "." + RollState));
+
+            // The roll travels the way the player fell, with the roll clip's own forward motion.
+            if (hasRollState)
+            {
+                RollRootMotion carrier = animator.GetComponent<RollRootMotion>();
+                if (carrier == null)
+                {
+                    carrier = animator.gameObject.AddComponent<RollRootMotion>();
+                }
+
+                carrier.Bind(movement, Animator.StringToHash(RollState));
+            }
         }
 
         private void OnEnable()

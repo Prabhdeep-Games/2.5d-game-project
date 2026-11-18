@@ -21,13 +21,16 @@ namespace TheSpaceBetween
     /// carries on after a swap when the new position is right against a surface that can be run on.
     ///
     /// Sliding: pressing slide while moving along the ground shrinks the capsule so the player fits under low ceilings,
-    /// and carries the speed the player arrived with, which then fades. A press just before landing still counts. Under a
+    /// and carries the speed the player arrived with, which then fades. A press just before landing still counts. Pushing
+    /// into something the slide fits under, like the front of a low hood, also slides, at the speed the keys ask for. Under a
     /// ceiling the slide cannot end, so it continues at End Speed and the movement keys choose the way out. Jump leaves a
     /// slide, and running into a wall run surface with run held turns it into a wall run. Every way out keeps the slide's
     /// speed and lets it fade, so nothing snaps. Scenes saved before the slide existed get its default keys automatically.
     ///
     /// Presentation (the Animator and particle effects) listens to the Jumped, WallJumped, Landed and slide events and reads
-    /// the state properties. Nothing here waits for an animation, so movement never depends on presentation.
+    /// the state properties. Nothing here waits for an animation, so movement never depends on presentation. The one thing
+    /// an animation can do is carry the player along the ground with its own motion (MoveByAnimation, used by the landing
+    /// roll), and only while the player stands on walkable ground.
     /// A plain steep surface without the component is just a wall.
     ///
     /// It reads its own input actions, so no Player Input component is needed on the player.
@@ -57,6 +60,7 @@ namespace TheSpaceBetween
         private const float SlideBufferSeconds = 0.15f;         // A slide press this long before touching the ground still counts.
         private const float SlideCooldownSeconds = 0.25f;       // After a slide ends, the next one cannot start for this long.
         private const float HeadroomRadiusScale = 0.95f;        // The headroom check is slightly thinner than the body, so a wall beside it does not count.
+        private const float SlideProbeLift = 0.05f;             // The check for room ahead of a slide starts this far above the floor.
         private const int HeadroomBufferSize = 8;
 
         //==================== INPUT =====================
@@ -109,7 +113,7 @@ namespace TheSpaceBetween
         [Tooltip("Master switch for sliding.")]
         [SerializeField] private bool slideEnabled = true;
 
-        [Tooltip("Slowest speed along the ground, in units per second, that can start a slide. Below this, the slide key does nothing.")]
+        [Tooltip("Slowest speed along the ground, in units per second, that can start a slide. Below this, the slide key does nothing, unless the player is pushing into something the slide fits under, like the front of a low hood; then the speed the keys ask for counts.")]
         [SerializeField, Min(0f)] private float minSlideEntrySpeed = 4f;
 
         [Tooltip("Speed at the start of a slide, as a multiple of the speed the player arrived with.")]
@@ -187,6 +191,9 @@ namespace TheSpaceBetween
         private float carriedX;
         private float airbornePeakY;
 
+        private float animationMotionX;          // Speed along X handed over by an animation's own motion, such as the landing roll.
+        private int animationMotionFrame = -1;   // The frame it was handed over on.
+
         private Vector3 contactNormal;
         private Collider contactCollider;
         private float contactTime = float.NegativeInfinity;
@@ -214,6 +221,8 @@ namespace TheSpaceBetween
         private float slideRequestedUntil = float.NegativeInfinity;
         private float slideReadyAt;
         private bool slideBlocked;
+        private int pushedIntoSideFrame = -1;    // The last frame the movement pushed into something sideways.
+        private float pushedIntoSideSign;        // Which way it pushed.
         private float bodyDrop;
         private readonly RaycastHit[] headroomBuffer = new RaycastHit[HeadroomBufferSize];
 
@@ -277,6 +286,30 @@ namespace TheSpaceBetween
 
         /// <summary>True while standing on something. False during a wall run, which has its own surface.</summary>
         public bool IsGrounded => isGrounded;
+
+        /// <summary>
+        /// True while an animation carries the player along the ground with its own motion, such as the landing roll.
+        /// The player keeps facing the way it is carried, and the movement keys can only make it faster that way.
+        /// </summary>
+        // The motion is handed over after this frame's Update, by the Animator, so it is used on the next frame.
+        public bool IsMovedByAnimation => Time.frameCount - animationMotionFrame <= 1;
+
+        /// <summary>
+        /// Carries the player along the ground by one frame of an animation's own motion, for example the landing roll
+        /// travelling on the way the player fell. Pass that frame's world movement and its length in seconds; only the part
+        /// along X is used, on the player's next move. Call it every frame the motion lasts. It is ignored in the air, on a
+        /// wall, in a slide and in a wall jump, so an animation can never hold the player somewhere movement would not.
+        /// </summary>
+        public void MoveByAnimation(Vector3 worldMotion, float seconds)
+        {
+            if (seconds <= 0f || !isGrounded || isSliding || isWallRunning || inWallJump)
+            {
+                return;
+            }
+
+            animationMotionX = worldMotion.x / seconds;
+            animationMotionFrame = Time.frameCount;
+        }
 
         /// <summary>
         /// True while the body is still turning to match a new surface direction: attaching to a wall, following a curve,
@@ -407,8 +440,9 @@ namespace TheSpaceBetween
                 OnMovedBySwap(input);
             }
 
-            // A slide keeps its direction until it ends, so the character does not spin around mid-slide.
-            if (!isSliding && Mathf.Abs(input) > FacingInputThreshold)
+            // A slide, or a roll carried by its animation, keeps its direction until it ends, so the character does not
+            // spin around halfway through.
+            if (!isSliding && !IsMovedByAnimation && Mathf.Abs(input) > FacingInputThreshold)
             {
                 facingSign = Mathf.Sign(input);
             }
@@ -487,9 +521,9 @@ namespace TheSpaceBetween
             {
                 UpdateGroundSlide(input);
             }
-            else if (CanStartGroundSlide())
+            else if (CanStartGroundSlide(input))
             {
-                BeginGroundSlide();
+                BeginGroundSlide(input);
             }
 
             // A jump needs room to stand up, so under a low ceiling the press is ignored.
@@ -526,6 +560,10 @@ namespace TheSpaceBetween
                 // Speed left over from a wall run fades out so the change to normal control is smooth.
                 carriedX *= Mathf.Exp(-CarriedMomentumDecay * Time.deltaTime);
                 horizontal = input * (isRunning ? runSpeed : moveSpeed) + carriedX;
+                if (isGrounded && IsMovedByAnimation)
+                {
+                    horizontal = WithAnimationMotion(horizontal);
+                }
             }
 
             // The movement actually made last frame. The frame that touches a surface is blocked by it,
@@ -535,6 +573,19 @@ namespace TheSpaceBetween
             Vector3 velocity = new Vector3(horizontal, verticalSpeed, 0f);
             CollisionFlags hits = controller.Move(velocity * Time.deltaTime);
             slideBlocked = isSliding && (hits & CollisionFlags.Sides) != 0;
+            if (!isSliding && (hits & CollisionFlags.Sides) != 0 && Mathf.Abs(horizontal) > FacingInputThreshold)
+            {
+                pushedIntoSideFrame = Time.frameCount;
+                pushedIntoSideSign = Mathf.Sign(horizontal);
+            }
+        }
+
+        // The animation sets the pace along the way the player faces. Keys held that way only count when they are faster;
+        // keys held the other way wait until the animation ends.
+        private float WithAnimationMotion(float horizontal)
+        {
+            float along = Mathf.Max(animationMotionX * facingSign, 0f);
+            return facingSign * Mathf.Max(horizontal * facingSign, along);
         }
 
         //==================== FALL HEIGHT =====================
@@ -552,20 +603,20 @@ namespace TheSpaceBetween
         }
 
         //==================== SLIDE =====================
-        private bool CanStartGroundSlide()
+        private bool CanStartGroundSlide(float input)
         {
             return slideEnabled
                    && Time.time <= slideRequestedUntil
                    && Time.time >= slideReadyAt
                    && isGrounded
                    && !inWallJump
-                   && Mathf.Abs(controller.velocity.x) >= minSlideEntrySpeed
-                   && StandingOnWalkableGround();
+                   && StandingOnWalkableGround()
+                   && Mathf.Abs(SlideEntryVelocity(input)) >= minSlideEntrySpeed;
         }
 
-        private void BeginGroundSlide()
+        private void BeginGroundSlide(float input)
         {
-            float arrivalSpeed = controller.velocity.x;
+            float arrivalSpeed = SlideEntryVelocity(input);
             isSliding = true;
             slideDirection = Mathf.Sign(arrivalSpeed);
             slideSpeed = Mathf.Abs(arrivalSpeed) * slideBoost;
@@ -575,6 +626,43 @@ namespace TheSpaceBetween
 
             SetCapsuleHeight(Mathf.Max(slideHeight, controller.radius * 2f));
             SlideStarted?.Invoke();
+        }
+
+        // The speed a slide starts from: how fast the player really moves along the ground. When the player is pushing
+        // into something they would fit under while sliding, like the front of a low hood, it is the speed the keys ask
+        // for instead, so a jump that ends against the hood can still slide under it without backing off first.
+        private float SlideEntryVelocity(float input)
+        {
+            float actual = controller.velocity.x;
+            float held = input * (isRunning ? runSpeed : moveSpeed);
+            bool pushing = Time.frameCount - pushedIntoSideFrame <= 1
+                           && Mathf.Abs(input) > FacingInputThreshold
+                           && Mathf.Sign(held) == pushedIntoSideSign
+                           && Mathf.Abs(held) > Mathf.Abs(actual);
+
+            return pushing && SlideFitsAhead(pushedIntoSideSign) ? held : actual;
+        }
+
+        // Whether the slide capsule has room to move forward from here. A wall or a barrier stops it; a gap under a
+        // hood does not. The bottom is raised a little so the floor itself never counts.
+        private bool SlideFitsAhead(float direction)
+        {
+            float height = Mathf.Max(slideHeight, controller.radius * 2f);
+            Vector3 feet = transform.position + standingCenter + Vector3.down * (standingHeight * 0.5f);
+            Vector3 top = feet + Vector3.up * (height - controller.radius);
+            Vector3 bottom = feet + Vector3.up * Mathf.Min(controller.radius + controller.skinWidth + SlideProbeLift, height - controller.radius);
+            float distance = controller.radius + controller.skinWidth;
+            int hits = Physics.CapsuleCastNonAlloc(bottom, top, controller.radius * HeadroomRadiusScale, Vector3.right * direction, headroomBuffer, distance, ~0, QueryTriggerInteraction.Ignore);
+
+            for (int i = 0; i < hits; i++)
+            {
+                if (headroomBuffer[i].collider.transform != transform)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private void UpdateGroundSlide(float input)
@@ -994,6 +1082,8 @@ namespace TheSpaceBetween
         {
             verticalSpeed = 0f;
             carriedX = 0f;
+            animationMotionFrame = -1;
+            pushedIntoSideFrame = -1;
             surfaceSpeed = 0f;
             isWallRunning = false;
             inWallJump = false;

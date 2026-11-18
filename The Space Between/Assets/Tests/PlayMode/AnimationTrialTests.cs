@@ -284,10 +284,10 @@ namespace TheSpaceBetween.Tests
         {
             yield return HoldRun(keyboard.dKey);
             yield return WaitUntil(() => X >= slideX, 5f);
-            Press(keyboard.cKey);
+            Press(keyboard.sKey);
             yield return null;
             Watch();
-            Release(keyboard.cKey);
+            Release(keyboard.sKey);
             yield return null;
             Watch();
         }
@@ -299,7 +299,7 @@ namespace TheSpaceBetween.Tests
             yield return LoadScene();
             yield return Teleport(2f, 0f);
 
-            yield return Tap(keyboard.cKey);
+            yield return Tap(keyboard.sKey);
             yield return WaitSeconds(0.1f);
 
             Assert.IsFalse(controller.IsSliding, "Standing still should not start a slide.");
@@ -314,7 +314,7 @@ namespace TheSpaceBetween.Tests
             float feetBefore = capsule.bounds.min.y;
 
             yield return RunAndSlideAt(18f);
-            Assert.IsTrue(controller.IsSliding, "Pressing C while running should start a slide.");
+            Assert.IsTrue(controller.IsSliding, "Pressing S while running should start a slide.");
             Assert.AreEqual(SlidingHeight, capsule.height, 0.01f, "The capsule should shrink.");
             Assert.AreEqual(feetBefore, capsule.bounds.min.y, 0.05f, "The feet should stay on the floor.");
             yield return ReleaseAll();
@@ -432,11 +432,29 @@ namespace TheSpaceBetween.Tests
             yield return WaitUntil(() => !controller.IsGrounded, 0.5f);
             yield return WaitUntil(() => Y < StandingOffset + 0.6f && capsule.velocity.y < 0f, 1f);
 
-            yield return Tap(keyboard.cKey);
+            // This jump ends against the front of the hood, so the player lands pushing into it at no real speed.
+            yield return Tap(keyboard.sKey);
             yield return WaitUntil(() => controller.IsGrounded, 0.5f);
             yield return WaitSeconds(0.05f);
 
             Assert.IsTrue(controller.IsSliding, "A slide pressed just before landing should start on landing.");
+            yield return WaitUntil(() => X > HoodEnd, 4f);
+            Assert.Greater(X, HoodEnd, "The slide should carry on under the hood.");
+            yield return ReleaseAll();
+        }
+
+        [UnityTest]
+        public IEnumerator PressingSlideIntoTheBarrier_DoesNothing()
+        {
+            yield return LoadScene();
+            yield return Teleport(BarrierX - 2f, 0f);
+            yield return HoldRun(keyboard.dKey);
+            yield return WaitSeconds(0.5f);
+            Assert.Less(X, BarrierX, "The barrier should stop a standing player.");
+
+            yield return Tap(keyboard.sKey);
+            yield return WaitSeconds(0.1f);
+            Assert.IsFalse(controller.IsSliding, "Pushing into a barrier the slide cannot fit under should not start a slide.");
             yield return ReleaseAll();
         }
 
@@ -625,7 +643,7 @@ namespace TheSpaceBetween.Tests
 
             // Slide under the hood.
             yield return WaitUntil(() => X >= HoodStart - 3f, 3f);
-            yield return Tap(keyboard.cKey);
+            yield return Tap(keyboard.sKey);
             Assert.IsTrue(controller.IsSliding, "The slide should start before the hood.");
             yield return WaitUntil(() => X > HoodEnd + 1f, 4f);
             Assert.Greater(X, HoodEnd, "The slide should pass the hood.");

@@ -110,7 +110,9 @@ namespace TheSpaceBetween
             upperArm = animator.GetBoneTransform(HumanBodyBones.RightUpperArm);
             lowerArm = animator.GetBoneTransform(HumanBodyBones.RightLowerArm);
             hand = animator.GetBoneTransform(HumanBodyBones.RightHand);
-            middleFinger = animator.GetBoneTransform(HumanBodyBones.RightMiddleProximal);
+            // Rigs with fewer finger chains (the Protagonist has only thumb and index) line the hand up along the index.
+            middleFinger = animator.GetBoneTransform(HumanBodyBones.RightMiddleProximal)
+                           ?? animator.GetBoneTransform(HumanBodyBones.RightIndexProximal);
             bonesReady = upperArm != null && lowerArm != null && hand != null;
         }
 
