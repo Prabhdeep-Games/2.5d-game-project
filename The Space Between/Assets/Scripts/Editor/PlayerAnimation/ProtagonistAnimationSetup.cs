@@ -12,7 +12,8 @@ namespace TheSpaceBetween.EditorTools
     ///   3. Makes Protagonist.controller from animation_Trial.controller (all the Mixamo clips in one controller), with
     ///      the walk and run speeds matched to the movement. The fall is the plain Mixamo fall, with the same blends as
     ///      animation_Trial.controller.
-    ///   4. Makes the Protagonist prefab: the rigged model with its Animator, CharacterFacing and SwapArmAim.
+    ///   4. Makes the Protagonist prefab: the rigged model with its Animator, CharacterFacing and SwapArmAim, and the
+    ///      textured Head, Clothes and Hair materials when the textured mesh exists (grey CHR_Jacket otherwise).
     /// Running it again updates what is already there. animation_Trial.controller itself is never changed.
     /// </summary>
     public static class ProtagonistAnimationSetup
@@ -26,7 +27,17 @@ namespace TheSpaceBetween.EditorTools
         private const string ControllerPath = OutputFolder + "/Protagonist.controller";
         private const string PrefabFolder = "Assets/Prefabs/Characters";
         private const string PrefabPath = PrefabFolder + "/Protagonist.prefab";
-        private const string MaterialPath = "Assets/Materials/Architecture/CHR_Jacket.mat";
+        private const string MaterialPath = "Assets/Materials/Architecture/CHR_Jacket.mat"; // grey fallback
+
+        // Mixamo merged the model's three materials into one, so the textured mesh is a copy of the rigged mesh split
+        // back into Head, Clothes and Hair (same vertices, UVs and skinning). The materials hold the Substance textures.
+        private const string TexturedMeshPath = OutputFolder + "/Protagonist_Mesh_Textured.asset";
+        private static readonly string[] TexturedMaterialPaths =
+        {
+            "Assets/Textures/Protagonist/Head/Protagonist_Head.mat",
+            "Assets/Textures/Protagonist/Body/Protagonist_Body.mat",
+            "Assets/Textures/Protagonist/Hair/Protagonist_Hair.mat",
+        };
 
         // Clips that loop, by their name inside the Mixamo FBX files.
         private static readonly string[] LoopingClips = { "Idle", "Walk", "Run", "FastRun", "Fall" };
@@ -243,13 +254,23 @@ namespace TheSpaceBetween.EditorTools
                 }
 
                 var material = AssetDatabase.LoadAssetAtPath<Material>(MaterialPath);
-                if (material != null)
+                var texturedMesh = AssetDatabase.LoadAssetAtPath<Mesh>(TexturedMeshPath);
+                Material[] texturedMaterials = TexturedMaterialPaths.Select(AssetDatabase.LoadAssetAtPath<Material>).ToArray();
+                bool textured = texturedMesh != null && texturedMesh.subMeshCount == texturedMaterials.Length
+                                && texturedMaterials.All(m => m != null);
+                foreach (SkinnedMeshRenderer skin in instance.GetComponentsInChildren<SkinnedMeshRenderer>())
                 {
-                    foreach (SkinnedMeshRenderer skin in instance.GetComponentsInChildren<SkinnedMeshRenderer>())
+                    if (textured)
+                    {
+                        skin.sharedMesh = texturedMesh;
+                        skin.sharedMaterials = texturedMaterials;
+                    }
+                    else if (material != null)
                     {
                         skin.sharedMaterials = Enumerable.Repeat(material, skin.sharedMaterials.Length).ToArray();
-                        skin.updateWhenOffscreen = true; // wide poses like the roll and wall jump are never culled at screen edges
                     }
+
+                    skin.updateWhenOffscreen = true; // wide poses like the roll and wall jump are never culled at screen edges
                 }
 
                 PrefabUtility.SaveAsPrefabAsset(instance, PrefabPath);
