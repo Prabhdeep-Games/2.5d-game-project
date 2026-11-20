@@ -30,13 +30,15 @@ namespace TheSpaceBetween.EditorTools
         private const string MaterialPath = "Assets/Materials/Architecture/CHR_Jacket.mat"; // grey fallback
 
         // Mixamo merged the model's three materials into one, so the textured mesh is a copy of the rigged mesh split
-        // back into Head, Clothes and Hair (same vertices, UVs and skinning). The materials hold the Substance textures.
+        // back into Head, Clothes and Hair (same vertices, UVs and skinning), plus the jacket as a fourth part. Head,
+        // Clothes and Hair hold the Substance textures; the jacket is a rough silver material made in Unity.
         private const string TexturedMeshPath = OutputFolder + "/Protagonist_Mesh_Textured.asset";
         private static readonly string[] TexturedMaterialPaths =
         {
             "Assets/Textures/Protagonist/Head/Protagonist_Head.mat",
             "Assets/Textures/Protagonist/Body/Protagonist_Body.mat",
             "Assets/Textures/Protagonist/Hair/Protagonist_Hair.mat",
+            "Assets/Textures/Protagonist/Body/Protagonist_Jacket.mat",
         };
 
         // Clips that loop, by their name inside the Mixamo FBX files.

@@ -560,7 +560,7 @@ AnimatorState:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: Roll
-  m_Speed: 1
+  m_Speed: 2.05
   m_CycleOffset: 0
   m_Transitions:
   - {fileID: 5728444980978891888}
@@ -642,7 +642,7 @@ AnimatorStateMachine:
     m_Position: {x: 410, y: 390, z: 0}
   - serializedVersion: 1
     m_State: {fileID: -5686515358097724123}
-    m_Position: {x: 445, y: 455, z: 0}
+    m_Position: {x: 450, y: 460, z: 0}
   - serializedVersion: 1
     m_State: {fileID: -1433288407877856929}
     m_Position: {x: 630, y: 260, z: 0}
@@ -692,7 +692,7 @@ AnimatorStateMachine:
   m_ChildStates:
   - serializedVersion: 1
     m_State: {fileID: -3660449305372212118}
-    m_Position: {x: 310, y: 70, z: 0}
+    m_Position: {x: 330, y: 210, z: 0}
   m_ChildStateMachines: []
   m_AnyStateTransitions: []
   m_EntryTransitions: []
@@ -1332,7 +1332,7 @@ BlendTree:
     m_Threshold: 10
     m_Position: {x: 0, y: 0}
     m_TimeScale: 1.7
-    m_CycleOffset: 0.94
+    m_CycleOffset: 0
     m_DirectBlendParameter: Speed
     m_Mirror: 0
   m_BlendParameter: Speed
