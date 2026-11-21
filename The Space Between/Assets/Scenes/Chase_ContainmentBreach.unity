@@ -24188,16 +24188,20 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 1765503473}
     - target: {fileID: 4000991307997682767, guid: 6f2126680c9932647b80a8946483b7f0, type: 3}
-      propertyPath: CameraDistance
-      value: 55
-      objectReference: {fileID: 0}
-    - target: {fileID: 4000991307997682767, guid: 6f2126680c9932647b80a8946483b7f0, type: 3}
       propertyPath: Lookahead.Enabled
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4000991307997682767, guid: 6f2126680c9932647b80a8946483b7f0, type: 3}
       propertyPath: Lookahead.Smoothing
       value: 4
+      objectReference: {fileID: 0}
+    - target: {fileID: 4000991307997682767, guid: 6f2126680c9932647b80a8946483b7f0, type: 3}
+      propertyPath: Composition.ScreenPosition.x
+      value: -0.08804315
+      objectReference: {fileID: 0}
+    - target: {fileID: 4000991307997682767, guid: 6f2126680c9932647b80a8946483b7f0, type: 3}
+      propertyPath: Composition.ScreenPosition.y
+      value: 0.10960376
       objectReference: {fileID: 0}
     - target: {fileID: 4026362636668215838, guid: 6f2126680c9932647b80a8946483b7f0, type: 3}
       propertyPath: m_Name
@@ -24249,27 +24253,27 @@ PrefabInstance:
       objectReference: {fileID: 1765503472}
     - target: {fileID: 6800866589333122383, guid: 6f2126680c9932647b80a8946483b7f0, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 2.2
+      value: 4.21408
       objectReference: {fileID: 0}
     - target: {fileID: 6800866589333122383, guid: 6f2126680c9932647b80a8946483b7f0, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 12.026557
+      value: 3.7096753
       objectReference: {fileID: 0}
     - target: {fileID: 6800866589333122383, guid: 6f2126680c9932647b80a8946483b7f0, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -55
+      value: -24
       objectReference: {fileID: 0}
     - target: {fileID: 7032533022309809671, guid: 6f2126680c9932647b80a8946483b7f0, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 2.2
+      value: 4.21408
       objectReference: {fileID: 0}
     - target: {fileID: 7032533022309809671, guid: 6f2126680c9932647b80a8946483b7f0, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 12.026557
+      value: 3.7096753
       objectReference: {fileID: 0}
     - target: {fileID: 7032533022309809671, guid: 6f2126680c9932647b80a8946483b7f0, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -55
+      value: -24
       objectReference: {fileID: 0}
     - target: {fileID: 7606152702071101478, guid: 6f2126680c9932647b80a8946483b7f0, type: 3}
       propertyPath: brain
@@ -27686,7 +27690,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 561301db1dfa07b49b3d8482fe55bc02, type: 3}
   m_Name: 
   m_EditorClassIdentifier: TheSpaceBetween.Runtime::TheSpaceBetween.CameraZone
-  extraDistance: 20
+  extraDistance: 0
 --- !u!65 &844668709
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -30353,7 +30357,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 561301db1dfa07b49b3d8482fe55bc02, type: 3}
   m_Name: 
   m_EditorClassIdentifier: TheSpaceBetween.Runtime::TheSpaceBetween.CameraZone
-  extraDistance: 11
+  extraDistance: 0
 --- !u!65 &901449771
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -33990,7 +33994,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 561301db1dfa07b49b3d8482fe55bc02, type: 3}
   m_Name: 
   m_EditorClassIdentifier: TheSpaceBetween.Runtime::TheSpaceBetween.CameraZone
-  extraDistance: 7
+  extraDistance: 0
 --- !u!65 &997094497
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -42340,7 +42344,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 561301db1dfa07b49b3d8482fe55bc02, type: 3}
   m_Name: 
   m_EditorClassIdentifier: TheSpaceBetween.Runtime::TheSpaceBetween.CameraZone
-  extraDistance: 20
+  extraDistance: 0
 --- !u!65 &1219508061
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -63913,18 +63917,6 @@ PrefabInstance:
       value: Player
       objectReference: {fileID: 0}
     - target: {fileID: 1317643903260183155, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
-      propertyPath: m_LocalScale.x
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 1317643903260183155, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
-      propertyPath: m_LocalScale.y
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 1317643903260183155, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
-      propertyPath: m_LocalScale.z
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 1317643903260183155, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
       propertyPath: m_LocalPosition.x
       value: 2.2
       objectReference: {fileID: 0}
@@ -63963,46 +63955,6 @@ PrefabInstance:
     - target: {fileID: 1317643903260183155, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 1317643903260183155, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
-      propertyPath: m_ConstrainProportionsScale
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 3574210914401960407, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
-      propertyPath: slideAction.m_SingletonActionBindings.Array.size
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 3574210914401960407, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
-      propertyPath: slideAction.m_SingletonActionBindings.Array.data[0].m_Id
-      value: c5312dd1-ebaf-44e6-8e88-224cdc5c6ca2
-      objectReference: {fileID: 0}
-    - target: {fileID: 3574210914401960407, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
-      propertyPath: jumpAction.m_SingletonActionBindings.Array.data[0].m_Path
-      value: <Keyboard>/#(W)
-      objectReference: {fileID: 0}
-    - target: {fileID: 3574210914401960407, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
-      propertyPath: slideAction.m_SingletonActionBindings.Array.data[0].m_Path
-      value: <Keyboard>/s
-      objectReference: {fileID: 0}
-    - target: {fileID: 3574210914401960407, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
-      propertyPath: slideAction.m_SingletonActionBindings.Array.data[0].m_Action
-      value: Slide
-      objectReference: {fileID: 0}
-    - target: {fileID: 3574210914401960407, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
-      propertyPath: slideAction.m_SingletonActionBindings.Array.data[0].m_Interactions
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 7427385053310247958, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
-      propertyPath: style
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7427385053310247958, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
-      propertyPath: width
-      value: 1.83
-      objectReference: {fileID: 0}
-    - target: {fileID: 8437837127869712236, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
-      propertyPath: swapAction.m_SingletonActionBindings.Array.data[0].m_Path
-      value: <Keyboard>/space
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

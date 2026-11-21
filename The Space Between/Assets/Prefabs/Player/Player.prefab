@@ -38,7 +38,7 @@ Transform:
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
+  m_ConstrainProportionsScale: 1
   m_Children:
   - {fileID: 5311765667037063}
   - {fileID: 5889286279165847599}
@@ -180,7 +180,7 @@ MonoBehaviour:
     m_SingletonActionBindings:
     - m_Name: 
       m_Id: a810a8b8-a016-4316-a878-1b5dec6d41b6
-      m_Path: <Keyboard>/w
+      m_Path: <Keyboard>/#(W)
       m_Interactions: 
       m_Processors: 
       m_Groups: 
@@ -229,7 +229,7 @@ MonoBehaviour:
     m_Interactions: 
     m_SingletonActionBindings:
     - m_Name: 
-      m_Id: a1bb6c54-ccda-4a66-902e-c26e094955b9
+      m_Id: c5312dd1-ebaf-44e6-8e88-224cdc5c6ca2
       m_Path: <Keyboard>/s
       m_Interactions: 
       m_Processors: 
@@ -289,7 +289,7 @@ MonoBehaviour:
     m_SingletonActionBindings:
     - m_Name: 
       m_Id: 25780e31-ce60-4643-957d-a3fa326f718e
-      m_Path: <Mouse>/leftButton
+      m_Path: <Keyboard>/space
       m_Interactions: 
       m_Processors: 
       m_Groups: 
@@ -407,8 +407,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: TheSpaceBetween.Runtime::TheSpaceBetween.SwapTargetIndicator
   ability: {fileID: 8437837127869712236}
-  style: 0
-  width: 0.04
+  style: 1
+  width: 1.83
   validColor: {r: 0.659, g: 0.863, b: 0.878, a: 0.7}
   rejectedColor: {r: 0.69, g: 0.42, b: 0.36, a: 0.7}
   noTargetColor: {r: 1, g: 1, b: 1, a: 0.25}
