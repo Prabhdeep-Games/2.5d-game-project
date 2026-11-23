@@ -110,7 +110,8 @@ namespace TheSpaceBetween.Tests
             SetField(controller, "runSpeed", RunSpeed);
 
             // Nearest keeps target choice out of these tests; aiming has its own tests.
-            ability = smoothSwap ? playerObject.AddComponent<SmoothSwapAbility>() : playerObject.AddComponent<SwapAbility>();
+            ability = playerObject.AddComponent<SwapAbility>();
+            ability.Motion = smoothSwap ? SwapMotion.Shrink : SwapMotion.Instant;
             SetField(ability, "aimMode", SwapAimMode.Nearest);
 
             playerObject.SetActive(true);

@@ -19,7 +19,8 @@ namespace TheSpaceBetween.Tests
             go.name = "Feedback Player Test";
             MakeGrey(go);
             go.SetActive(false);
-            ability = smooth ? go.AddComponent<SmoothSwapAbility>() : go.AddComponent<SwapAbility>();
+            ability = go.AddComponent<SwapAbility>();
+            ability.Motion = smooth ? SwapMotion.Shrink : SwapMotion.Instant;
             SetField(ability, "aimMode", SwapAimMode.Nearest);
             feedback = go.AddComponent<SwapFeedback>();
             SetField(feedback, "pulseSpeed", 0f);

@@ -18,6 +18,7 @@ namespace TheSpaceBetween.Tests
             body.useGravity = false;
 
             SwapAbility ability = go.AddComponent<SwapAbility>();
+            ability.Motion = SwapMotion.Instant;
             SetField(ability, "aimMode", SwapAimMode.Nearest);
             if (glassDoesNotBlock)
             {
@@ -208,6 +209,7 @@ namespace TheSpaceBetween.Tests
             controller.height = 2f;
             controller.radius = 0.5f;
             SwapAbility player = go.AddComponent<SwapAbility>();
+            player.Motion = SwapMotion.Instant;
             SetField(player, "aimMode", SwapAimMode.Nearest);
             go.SetActive(true);
 

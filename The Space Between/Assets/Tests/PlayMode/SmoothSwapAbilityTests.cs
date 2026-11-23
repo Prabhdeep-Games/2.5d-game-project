@@ -17,14 +17,14 @@ namespace TheSpaceBetween.Tests
     {
         private const float WaitLimitSeconds = 3f;
 
-        private SmoothSwapAbility CreatePlayer(Vector3 position)
+        private SwapAbility CreatePlayer(Vector3 position)
         {
             GameObject go = Track(GameObject.CreatePrimitive(PrimitiveType.Cube));
             go.name = "Smooth Player Test";
             go.transform.position = position;
             go.SetActive(false);
             go.AddComponent<AirJumpRecorder>();
-            SmoothSwapAbility ability = go.AddComponent<SmoothSwapAbility>();
+            SwapAbility ability = go.AddComponent<SwapAbility>();
             SetField(ability, "aimMode", SwapAimMode.Nearest);
             go.SetActive(true);
             Physics.SyncTransforms();
@@ -47,7 +47,7 @@ namespace TheSpaceBetween.Tests
             return swappable;
         }
 
-        private static IEnumerator WaitForSwapToEnd(SmoothSwapAbility ability)
+        private static IEnumerator WaitForSwapToEnd(SwapAbility ability)
         {
             float start = Time.realtimeSinceStartup;
             while (ability.IsSwapping && Time.realtimeSinceStartup - start < WaitLimitSeconds)
@@ -59,7 +59,7 @@ namespace TheSpaceBetween.Tests
         [UnityTest]
         public IEnumerator Swap_StopsGameTimeWhilePlayingAndResumesAfterwards()
         {
-            SmoothSwapAbility player = CreatePlayer(Vector3.zero);
+            SwapAbility player = CreatePlayer(Vector3.zero);
             CreateTarget(new Vector3(5f, 0f, 0f));
 
             player.TrySwap();
@@ -76,7 +76,7 @@ namespace TheSpaceBetween.Tests
         [UnityTest]
         public IEnumerator Swap_ShrinksBothBodiesThenRestoresTheirSize()
         {
-            SmoothSwapAbility player = CreatePlayer(Vector3.zero);
+            SwapAbility player = CreatePlayer(Vector3.zero);
             Swappable target = CreateTarget(new Vector3(5f, 0f, 0f));
             float smallestSeen = 1f;
 
@@ -96,7 +96,7 @@ namespace TheSpaceBetween.Tests
         [UnityTest]
         public IEnumerator Swap_ExchangesPositionsAfterTheAnimation()
         {
-            SmoothSwapAbility player = CreatePlayer(Vector3.zero);
+            SwapAbility player = CreatePlayer(Vector3.zero);
             Swappable target = CreateTarget(new Vector3(5f, 0f, 0f));
 
             player.TrySwap();
@@ -109,7 +109,7 @@ namespace TheSpaceBetween.Tests
         [UnityTest]
         public IEnumerator Swap_KeepsTheTargetsMomentum()
         {
-            SmoothSwapAbility player = CreatePlayer(Vector3.zero);
+            SwapAbility player = CreatePlayer(Vector3.zero);
             Swappable target = CreateTarget(new Vector3(5f, 0f, 0f), dynamicBody: true);
             Rigidbody body = target.GetComponent<Rigidbody>();
             body.linearVelocity = new Vector3(0f, 4f, 0f);
@@ -124,7 +124,7 @@ namespace TheSpaceBetween.Tests
         [UnityTest]
         public IEnumerator Swap_IgnoresNewAttemptsWhileAnimating()
         {
-            SmoothSwapAbility player = CreatePlayer(Vector3.zero);
+            SwapAbility player = CreatePlayer(Vector3.zero);
             CreateTarget(new Vector3(5f, 0f, 0f));
 
             player.TrySwap();
@@ -137,7 +137,7 @@ namespace TheSpaceBetween.Tests
         [UnityTest]
         public IEnumerator PlayerLandingInTheAir_GetsOneExtraJump()
         {
-            SmoothSwapAbility player = CreatePlayer(new Vector3(0f, 0.5f, 0f));
+            SwapAbility player = CreatePlayer(new Vector3(0f, 0.5f, 0f));
             CreateTarget(new Vector3(5f, 6f, 0f));
             AirJumpRecorder recorder = player.GetComponent<AirJumpRecorder>();
 
@@ -154,7 +154,7 @@ namespace TheSpaceBetween.Tests
             floor.transform.position = new Vector3(0f, -0.5f, 0f);
             floor.transform.localScale = new Vector3(40f, 1f, 10f);
 
-            SmoothSwapAbility player = CreatePlayer(new Vector3(0f, 0.5f, 0f));
+            SwapAbility player = CreatePlayer(new Vector3(0f, 0.5f, 0f));
             CreateTarget(new Vector3(5f, 0.5f, 0f));
             AirJumpRecorder recorder = player.GetComponent<AirJumpRecorder>();
             Physics.SyncTransforms();
@@ -181,7 +181,7 @@ namespace TheSpaceBetween.Tests
             var capsule = go.AddComponent<CapsuleCollider>();
             capsule.height = 2f;
             capsule.radius = 0.5f;
-            SmoothSwapAbility player = go.AddComponent<SmoothSwapAbility>();
+            SwapAbility player = go.AddComponent<SwapAbility>();
             SetField(player, "aimMode", SwapAimMode.Nearest);
             go.SetActive(true);
 
@@ -198,7 +198,7 @@ namespace TheSpaceBetween.Tests
         [UnityTest]
         public IEnumerator DisablingTheAbilityMidSwap_RestoresTimeAndSize()
         {
-            SmoothSwapAbility player = CreatePlayer(Vector3.zero);
+            SwapAbility player = CreatePlayer(Vector3.zero);
             Swappable target = CreateTarget(new Vector3(5f, 0f, 0f), dynamicBody: true);
 
             player.TrySwap();

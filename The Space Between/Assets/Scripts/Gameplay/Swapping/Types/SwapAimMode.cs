@@ -1,6 +1,6 @@
 namespace TheSpaceBetween
 {
-    /// <summary>How a SwapAbility decides which object it is aiming at.</summary>
+    /// <summary>How the ability decides which object it is aiming at.</summary>
     public enum SwapAimMode
     {
         /// <summary>The mouse cursor or the right stick sets a free aim direction.</summary>

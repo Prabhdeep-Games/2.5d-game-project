@@ -1,49 +1,54 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
 
 namespace TheSpaceBetween
 {
+    //================================================================================================================
+    // SWAP ABILITY
+    // Everything that decides and performs a swap: input, aiming, the rules, the gesture and the motion. Everything
+    // the player sees and hears about a swap lives in SwapFeedback. The object side of a swap is Swappable.
+    //================================================================================================================
+
     /// <summary>
     /// Lets this object swap positions with the Swappable it is aiming at.
     ///
-    /// Choosing the target (see SwapAimMode):
-    ///   Pointer  A thick ray is cast from this object along the aim direction (mouse cursor or
-    ///            right stick). The first Swappable the ray reaches is the target. If something
-    ///            solid in the Sight Blockers layers lies on the ray's centre line first, there is
-    ///            no target. The thickness only makes objects easier to hit, never walls.
-    ///   Facing   The same ray, aimed left or right to match the way the player last moved.
-    ///   Nearest  The old behaviour: the nearest valid Swappable in any direction.
-    /// The aimed target is never replaced by an object behind it. If it is rejected, the swap is
-    /// rejected and the reason is reported.
+    /// <para><b>Targeting</b> (see <see cref="SwapAimMode"/>). A thick ray is cast along the aim; the first Swappable it
+    /// reaches is the target. Solid things in Sight Blockers stop the aim along its centre line only, so the thickness
+    /// makes objects easier to hit without letting walls hide them. The aimed target is never replaced by an object
+    /// behind it: if it is rejected, the swap is rejected and the reason is reported.</para>
     ///
-    /// Rules checked for the aimed target:
-    ///   1. The target is within range.
-    ///   2. The target is not locked.
-    ///   3. Nothing in the Sight Blockers layers lies between the two. Leave glass layers out of
-    ///      that mask and glass lets the player swap across it.
-    ///   4. Both bodies fit at their new positions without overlapping solid geometry.
-    /// Bodies trade standing points (the middle of the bottom of each body), so a tall player and
-    /// a short crate both keep their feet at the other's floor level.
+    /// <para><b>Rules</b>, checked for the aimed target: within range, not locked, nothing in Sight Blockers between the
+    /// two (leave glass out of that mask to swap across glass), and both bodies fit at their new positions. Bodies trade
+    /// standing points, so a tall player and a short crate both keep their feet on the other's floor.</para>
     ///
-    /// Both bodies lose all momentum when they swap.
+    /// <para><b>Gesture</b>. With Gesture Seconds above 0, a press with a valid target locks it and waits before
+    /// swapping, so the hand can close (SwapArmAim). The rules are checked again at the end. The timer lives here, so a
+    /// missing animation can never delay or block a swap.</para>
     ///
-    /// Gesture: with Gesture Seconds above 0, pressing swap with a valid target locks that target and waits that long
-    /// before the swap happens, so a character can close its fist first (see SwapArmAim). The rules are checked again
-    /// at the end, in case the target moved or something came between. A press with no valid target is rejected at once.
-    /// The timer lives here, so a missing or unfinished animation can never delay or block a swap.
+    /// <para><b>Motion</b> (see <see cref="SwapMotion"/>). Shrink stops game time, shrinks both bodies, trades their
+    /// places while tiny and grows them back, keeping their momentum; a player left in the air gets one extra jump.
+    /// Instant trades places in one frame and removes all momentum.</para>
+    ///
+    /// <para><b>Events</b>. <see cref="Swapped"/> fires when a swap is accepted; <see cref="SwapCompleted"/> fires when
+    /// both bodies have arrived. For Instant they fire in the same frame.</para>
     /// </summary>
+    [DisallowMultipleComponent]
     [RequireComponent(typeof(Swappable))]
-    public class SwapAbility : MonoBehaviour
+    [AddComponentMenu("The Space Between/Swap/Swap Ability")]
+    public sealed class SwapAbility : MonoBehaviour
     {
         private const int MaxCandidates = 32;
         private const float ClearanceSkin = 0.02f;
         private const float PointerMovedThreshold = 1f;
+        private const float GroundProbeLift = 0.05f;
+        private const float GroundProbeLength = 0.15f;
 
         //==================== INPUT =====================
-        [Header("Input")]
-        [Tooltip("Pressing this action attempts a swap. Reads the left mouse button and the gamepad west button.")]
+        [InspectorSection("Input")]
+        [Tooltip("Pressing this action attempts a swap.")]
         [SerializeField] private InputAction swapAction = new InputAction("Swap", InputActionType.Button);
 
         [Tooltip("Aim direction from a stick. Pointer mode only.")]
@@ -53,7 +58,7 @@ namespace TheSpaceBetween
         [SerializeField] private InputAction pointerAction = new InputAction("Pointer", InputActionType.Value);
 
         //==================== TARGETING =====================
-        [Header("Targeting")]
+        [InspectorSection("Targeting")]
         [Tooltip("How the target is chosen. Pointer: mouse or right stick. Facing: the way the player last moved. Nearest: old behaviour, nearest object in any direction.")]
         [SerializeField] private SwapAimMode aimMode = SwapAimMode.Pointer;
 
@@ -61,14 +66,16 @@ namespace TheSpaceBetween
         [SerializeField, Min(0.05f)] private float aimRadius = 0.35f;
 
         [Tooltip("How far the stick must be pushed before it counts as aiming.")]
+        [ShowIf(nameof(aimMode), SwapAimMode.Pointer)]
         [SerializeField, Range(0.1f, 0.9f)] private float stickDeadZone = 0.3f;
 
         [Tooltip("Camera used to turn the cursor into a world position. Empty means the main camera.")]
+        [ShowIf(nameof(aimMode), SwapAimMode.Pointer)]
         [SerializeField] private Camera aimCamera;
 
         //==================== RULES =====================
-        [Header("Rules")]
-        [Tooltip("Maximum distance to a target, measured between the centers of the two bodies, in world units.")]
+        [InspectorSection("Rules")]
+        [Tooltip("Maximum distance to a target, measured between the centres of the two bodies, in world units.")]
         [SerializeField, Min(0.1f)] private float range = 8f;
 
         [Tooltip("Layers that can hold a Swappable. Keep this narrow so the range check stays cheap.")]
@@ -81,20 +88,44 @@ namespace TheSpaceBetween
         [SerializeField] private LayerMask clearanceLayers = ~0;
 
         //==================== GESTURE =====================
-        [Header("Gesture")]
+        [InspectorSection("Gesture")]
         [Tooltip("Seconds between pressing swap and the swap happening, for the hand to close. 0 swaps on the press.")]
         [SerializeField, Min(0f)] private float gestureSeconds;
 
+        //==================== MOTION =====================
+        [InspectorSection("Motion")]
+        [Tooltip("Shrink: game time stops, both bodies shrink, trade places and grow back. Instant: they trade places in one frame.")]
+        [SerializeField] private SwapMotion motion = SwapMotion.Shrink;
+
+        [Tooltip("Seconds both bodies take to shrink. Real time, not game time.")]
+        [ShowIf(nameof(motion), SwapMotion.Shrink)]
+        [SerializeField, Min(0.01f)] private float shrinkTime = 0.15f;
+
+        [Tooltip("Seconds both bodies take to grow back. Real time, not game time.")]
+        [ShowIf(nameof(motion), SwapMotion.Shrink)]
+        [SerializeField, Min(0.01f)] private float growTime = 0.15f;
+
+        [Tooltip("Size at the smallest point, as a fraction of normal size. Never zero, so colliders stay valid. 1 keeps both bodies at full size and leaves the swap to the displacement silhouettes.")]
+        [ShowIf(nameof(motion), SwapMotion.Shrink)]
+        [SerializeField, Range(0.01f, 1f)] private float smallestScale = 0.05f;
+
+        [Tooltip("How quickly the size changes over each phase. A slow start and end looks smoother.")]
+        [ShowIf(nameof(motion), SwapMotion.Shrink)]
+        [SerializeField] private AnimationCurve easing = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+
         //==================== EVENTS =====================
-        [Header("Events")]
-        [Tooltip("Invoked after a successful swap.")]
+        [InspectorSection("Events", false)]
+        [Tooltip("Invoked when a swap is accepted.")]
         [SerializeField] private UnityEvent swappedEvent;
+
+        [Tooltip("Invoked when both bodies have arrived and game time runs again.")]
+        [SerializeField] private UnityEvent swapCompletedEvent;
 
         [Tooltip("Invoked when a swap attempt is rejected.")]
         [SerializeField] private UnityEvent rejectedEvent;
 
         //==================== DEBUG =====================
-        [Header("Debug")]
+        [InspectorSection("Debug", false)]
         [Tooltip("Write the result of every swap attempt to the Console.")]
         [SerializeField] private bool logAttempts;
 
@@ -110,14 +141,25 @@ namespace TheSpaceBetween
         [Tooltip("Whether the current target could be swapped with right now. None means yes.")]
         [ReadOnly, SerializeField] private SwapRejection currentStatus;
 
-        protected Swappable self;
+        // Targeting state
+        private Swappable self;
         private IFacingSource facingSource;
         private Vector3 aimDirection = Vector3.right;
         private Vector3 aimEnd;
         private Vector2 lastPointer;
         private bool stickWasLastUsed;
+
+        // Gesture state
         private Swappable gestureTarget;
         private float gestureElapsed;
+
+        // Motion state
+        private bool isSwapping;
+        private Coroutine running;
+        private Swappable motionTarget;
+        private float timeScaleBefore = 1f;
+        private Vector3 selfFullScale;
+        private Vector3 targetFullScale;
 
         private readonly Collider[] candidateBuffer = new Collider[MaxCandidates];
         private readonly Collider[] clearanceBuffer = new Collider[MaxCandidates];
@@ -125,8 +167,11 @@ namespace TheSpaceBetween
         private readonly RaycastHit[] castBuffer = new RaycastHit[MaxCandidates];
 
         //==================== OUTPUTS =====================
-        /// <summary>Raised after a successful swap. The argument is the object swapped with.</summary>
+        /// <summary>Raised when a swap is accepted. The argument is the object swapped with.</summary>
         public event Action<Swappable> Swapped;
+
+        /// <summary>Raised when both bodies have arrived. For Instant motion, in the same frame as <see cref="Swapped"/>.</summary>
+        public event Action<Swappable> SwapCompleted;
 
         /// <summary>Raised when an attempt is rejected, with the reason.</summary>
         public event Action<SwapRejection> SwapRejected;
@@ -134,6 +179,19 @@ namespace TheSpaceBetween
         public SwapRejection LastResult => lastResult;
 
         public float Range => range;
+
+        /// <summary>How an accepted swap plays out. Change it only while no swap is playing.</summary>
+        public SwapMotion Motion
+        {
+            get => motion;
+            set => motion = value;
+        }
+
+        /// <summary>True while a Shrink swap is playing. New attempts are ignored until it ends.</summary>
+        public bool IsSwapping => isSwapping;
+
+        /// <summary>How long a swap takes from acceptance to arrival, in real time. 0 for Instant.</summary>
+        public float TotalDuration => motion == SwapMotion.Shrink ? shrinkTime + growTime : 0f;
 
         /// <summary>True from an accepted swap press until the fist has closed and the swap happens.</summary>
         public bool IsGesturing => gestureTarget != null;
@@ -169,13 +227,13 @@ namespace TheSpaceBetween
             pointerAction = new InputAction("Pointer", InputActionType.Value, "<Mouse>/position");
         }
 
-        protected virtual void Awake()
+        private void Awake()
         {
             self = GetComponent<Swappable>();
             facingSource = GetComponent<IFacingSource>();
         }
 
-        protected virtual void OnEnable()
+        private void OnEnable()
         {
             swapAction.performed += OnSwapPerformed;
             swapAction.Enable();
@@ -183,18 +241,30 @@ namespace TheSpaceBetween
             pointerAction.Enable();
         }
 
-        protected virtual void OnDisable()
+        private void OnDisable()
         {
             swapAction.performed -= OnSwapPerformed;
             swapAction.Disable();
             aimStickAction.Disable();
             pointerAction.Disable();
             gestureTarget = null;
+
+            if (isSwapping)
+            {
+                // Never leave the world shrunk, frozen or with game time stopped.
+                if (running != null)
+                {
+                    StopCoroutine(running);
+                    running = null;
+                }
+
+                EndShrinkMotion();
+            }
         }
 
-        protected virtual void Update()
+        private void Update()
         {
-            if (!IsSwapping)
+            if (!isSwapping)
             {
                 RefreshTargeting();
             }
@@ -206,9 +276,6 @@ namespace TheSpaceBetween
         }
 
         //==================== PUBLIC API =====================
-        /// <summary>True while a swap is still playing out. New attempts are ignored until it ends.</summary>
-        public virtual bool IsSwapping => false;
-
         /// <summary>Sets the aim direction by hand. Pointer mode overwrites it as soon as the mouse or stick moves.</summary>
         public void SetAimDirection(Vector3 direction)
         {
@@ -222,7 +289,7 @@ namespace TheSpaceBetween
         /// <summary>Attempts a swap with the aimed target. Returns true when a swap was accepted.</summary>
         public bool TrySwap()
         {
-            if (IsSwapping || IsGesturing)
+            if (isSwapping || IsGesturing)
             {
                 return false;
             }
@@ -239,7 +306,7 @@ namespace TheSpaceBetween
             return Finish(SwapRejection.None, chosen);
         }
 
-        //==================== TARGETING =====================
+        //==================== INPUT AND GESTURE =====================
         private void OnSwapPerformed(InputAction.CallbackContext context)
         {
             if (gestureSeconds <= 0f)
@@ -254,7 +321,7 @@ namespace TheSpaceBetween
         // A press that cannot work is rejected straight away instead of closing the hand on nothing.
         private void BeginGesture()
         {
-            if (IsSwapping || IsGesturing)
+            if (isSwapping || IsGesturing)
             {
                 return;
             }
@@ -301,6 +368,7 @@ namespace TheSpaceBetween
             Finish(SwapRejection.None, chosen);
         }
 
+        //==================== TARGETING =====================
         // Works out the aim and the target from the current state of the world.
         private void RefreshTargeting()
         {
@@ -335,8 +403,8 @@ namespace TheSpaceBetween
                 return;
             }
 
-            // With no stick input, the cursor sets the aim. If the player used the stick last and
-            // the cursor has not moved, the stick's aim is kept.
+            // With no stick input the cursor sets the aim. If the stick was used last and the cursor has not moved,
+            // the stick's aim is kept.
             Vector2 pointer = pointerAction.ReadValue<Vector2>();
             bool pointerMoved = (pointer - lastPointer).sqrMagnitude > PointerMovedThreshold;
             lastPointer = pointer;
@@ -346,8 +414,8 @@ namespace TheSpaceBetween
                 return;
             }
 
-            Camera cam = aimCamera != null ? aimCamera : Camera.main;
-            if (cam == null)
+            Camera view = aimCamera != null ? aimCamera : Camera.main;
+            if (view == null)
             {
                 return;
             }
@@ -355,7 +423,7 @@ namespace TheSpaceBetween
             stickWasLastUsed = false;
             Vector3 origin = self.Center;
             Plane gamePlane = new Plane(Vector3.forward, origin);
-            Ray ray = cam.ScreenPointToRay(pointer);
+            Ray ray = view.ScreenPointToRay(pointer);
             if (gamePlane.Raycast(ray, out float distance))
             {
                 SetAimDirection(ray.GetPoint(distance) - origin);
@@ -370,9 +438,8 @@ namespace TheSpaceBetween
             currentTarget = null;
             currentStatus = SwapRejection.NoTargetInRange;
 
-            // Solid things end the aim along its centre line, the same line the sight rule checks. The thickness
-            // only makes objects easier to hit; if it also counted for walls, a ledge corner that the centre line
-            // clears would hide a crate standing on that ledge from every position below it.
+            // Solid things end the aim along its centre line, the same line the sight rule checks. If the thickness
+            // also counted for walls, a ledge corner that the centre line clears would hide a crate standing on it.
             float blockedAt = DistanceToSightBlocker(origin, out Vector3 blockedPoint);
 
             int hits = Physics.SphereCastNonAlloc(origin, aimRadius, aimDirection, castBuffer, range, swappableLayers, QueryTriggerInteraction.Ignore);
@@ -551,10 +618,7 @@ namespace TheSpaceBetween
 
         private bool HasLineOfSight(Swappable target)
         {
-            Vector3 from = self.Center;
-            Vector3 to = target.Center;
-
-            if (!Physics.Linecast(from, to, out RaycastHit hit, sightBlockers, QueryTriggerInteraction.Ignore))
+            if (!Physics.Linecast(self.Center, target.Center, out RaycastHit hit, sightBlockers, QueryTriggerInteraction.Ignore))
             {
                 return true;
             }
@@ -602,36 +666,17 @@ namespace TheSpaceBetween
             return new Bounds(source.center + shift, extents * 2f);
         }
 
-        /// <summary>
-        /// Carries out an accepted swap. The default moves both bodies at once and removes their
-        /// momentum. Subclasses override this to play a different kind of swap.
-        /// </summary>
-        protected virtual void Execute(Swappable target)
-        {
-            Vector3 shiftOfSelf = SelfShiftTo(target);
-
-            self.MoveTo(self.Position + shiftOfSelf);
-            target.MoveTo(target.Position - shiftOfSelf);
-            Physics.SyncTransforms();
-        }
-
-        /// <summary>
-        /// How far this body must move to trade standing points with the target. The target moves
-        /// by the opposite amount.
-        /// </summary>
-        protected Vector3 SelfShiftTo(Swappable target)
+        /// <summary>How far this body moves to trade standing points with the target. The target moves the opposite way.</summary>
+        private Vector3 SelfShiftTo(Swappable target)
         {
             return target.Anchor - self.Anchor;
         }
 
         /// <summary>Whether something solid is directly below the bottom of the given body.</summary>
-        protected bool IsStandingOnSomething(Swappable body)
+        private bool IsStandingOnSomething(Swappable body)
         {
-            const float probeLift = 0.05f;
-            const float probeLength = 0.15f;
-
-            Vector3 origin = body.Anchor + Vector3.up * probeLift;
-            return Physics.Raycast(origin, Vector3.down, probeLength, clearanceLayers, QueryTriggerInteraction.Ignore);
+            Vector3 origin = body.Anchor + Vector3.up * GroundProbeLift;
+            return Physics.Raycast(origin, Vector3.down, GroundProbeLength, clearanceLayers, QueryTriggerInteraction.Ignore);
         }
 
         private bool Finish(SwapRejection result, Swappable target)
@@ -644,16 +689,136 @@ namespace TheSpaceBetween
                 Debug.Log($"[{nameof(SwapAbility)}] '{name}': {SwapRejectionText.Describe(result)}{detail}", this);
             }
 
-            if (result == SwapRejection.None)
+            if (result != SwapRejection.None)
             {
-                Swapped?.Invoke(target);
-                swappedEvent?.Invoke();
-                return true;
+                SwapRejected?.Invoke(result);
+                rejectedEvent?.Invoke();
+                return false;
             }
 
-            SwapRejected?.Invoke(result);
-            rejectedEvent?.Invoke();
-            return false;
+            Swapped?.Invoke(target);
+            swappedEvent?.Invoke();
+
+            // An instant swap has already arrived; a Shrink swap reports its arrival when the motion ends.
+            if (!isSwapping)
+            {
+                RaiseCompleted(target);
+            }
+
+            return true;
+        }
+
+        private void RaiseCompleted(Swappable target)
+        {
+            SwapCompleted?.Invoke(target);
+            swapCompletedEvent?.Invoke();
+        }
+
+        //==================== MOTION =====================
+        private void Execute(Swappable target)
+        {
+            Vector3 shiftOfSelf = SelfShiftTo(target);
+
+            if (motion == SwapMotion.Instant)
+            {
+                self.MoveTo(self.Position + shiftOfSelf);
+                target.MoveTo(target.Position - shiftOfSelf);
+                Physics.SyncTransforms();
+                return;
+            }
+
+            running = StartCoroutine(PlayShrinkMotion(target, shiftOfSelf));
+        }
+
+        private IEnumerator PlayShrinkMotion(Swappable target, Vector3 shiftOfSelf)
+        {
+            isSwapping = true;
+            motionTarget = target;
+            selfFullScale = self.transform.localScale;
+            targetFullScale = target.transform.localScale;
+
+            timeScaleBefore = Time.timeScale;
+            Time.timeScale = 0f;
+
+            self.Freeze();
+            target.Freeze();
+
+            yield return AnimateScale(1f, smallestScale, shrinkTime);
+
+            // The bodies are tiny now. Move them and keep their momentum.
+            self.MoveTo(self.Position + shiftOfSelf, true);
+            target.MoveTo(target.Position - shiftOfSelf, true);
+            Physics.SyncTransforms();
+
+            yield return AnimateScale(smallestScale, 1f, growTime);
+
+            running = null;
+            EndShrinkMotion();
+
+            if (!IsStandingOnSomething(self))
+            {
+                GrantAirJumpToSelf();
+            }
+
+            RaiseCompleted(target);
+        }
+
+        // Runs on unscaled time, because game time is stopped for the whole motion.
+        private IEnumerator AnimateScale(float from, float to, float seconds)
+        {
+            float elapsed = 0f;
+            while (elapsed < seconds)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float eased = easing.Evaluate(Mathf.Clamp01(elapsed / seconds));
+                ApplyScale(Mathf.LerpUnclamped(from, to, eased));
+                yield return null;
+            }
+
+            ApplyScale(to);
+        }
+
+        private void ApplyScale(float factor)
+        {
+            if (self != null)
+            {
+                self.transform.localScale = selfFullScale * factor;
+            }
+
+            if (motionTarget != null)
+            {
+                motionTarget.transform.localScale = targetFullScale * factor;
+            }
+        }
+
+        // Puts sizes back, releases both bodies and restarts game time.
+        private void EndShrinkMotion()
+        {
+            if (self != null)
+            {
+                self.transform.localScale = selfFullScale;
+                self.Unfreeze();
+            }
+
+            if (motionTarget != null)
+            {
+                motionTarget.transform.localScale = targetFullScale;
+                motionTarget.Unfreeze();
+            }
+
+            Time.timeScale = timeScaleBefore;
+            motionTarget = null;
+            isSwapping = false;
+            Physics.SyncTransforms();
+        }
+
+        private void GrantAirJumpToSelf()
+        {
+            IAirJumpGrantable[] grantables = GetComponents<IAirJumpGrantable>();
+            for (int i = 0; i < grantables.Length; i++)
+            {
+                grantables[i].GrantAirJump();
+            }
         }
 
         //==================== GIZMOS =====================
@@ -664,12 +829,8 @@ namespace TheSpaceBetween
                 return;
             }
 
-            Vector3 center = transform.position;
             Swappable own = GetComponent<Swappable>();
-            if (own != null)
-            {
-                center = own.Center;
-            }
+            Vector3 center = own != null ? own.Center : transform.position;
 
             Gizmos.color = new Color(0.2f, 0.8f, 1f, 0.6f);
             Gizmos.DrawWireSphere(center, range);

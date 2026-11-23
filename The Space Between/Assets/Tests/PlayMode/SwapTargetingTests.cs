@@ -33,6 +33,7 @@ namespace TheSpaceBetween.Tests
             }
 
             SwapAbility ability = go.AddComponent<SwapAbility>();
+            ability.Motion = SwapMotion.Instant;
             SetField(ability, "aimMode", mode);
             SetField(ability, "sightBlockers", (LayerMask)~(1 << GlassLayer));
             go.SetActive(true);
@@ -229,12 +230,12 @@ namespace TheSpaceBetween.Tests
         {
             SwapAbility player = CreatePlayer();
             CreateTarget(new Vector3(5f, 0f, 0f));
-            SwapTargetIndicator indicator = AddIndicator(player, SwapIndicatorStyle.Straight);
+            SwapFeedback indicator = AddIndicator(player, SwapIndicatorStyle.Straight);
 
             yield return null;
             yield return null;
 
-            LineRenderer line = indicator.GetComponent<LineRenderer>();
+            LineRenderer line = indicator.AimLine;
             Assert.IsTrue(line.enabled);
             Assert.AreEqual(2, line.positionCount);
             Assert.AreEqual(5f, line.GetPosition(1).x, 0.01f);
@@ -245,12 +246,12 @@ namespace TheSpaceBetween.Tests
         {
             SwapAbility player = CreatePlayer();
             CreateTarget(new Vector3(5f, 0f, 0f));
-            SwapTargetIndicator indicator = AddIndicator(player, SwapIndicatorStyle.Wobbly);
+            SwapFeedback indicator = AddIndicator(player, SwapIndicatorStyle.Wobbly);
 
             yield return null;
             yield return null;
 
-            LineRenderer line = indicator.GetComponent<LineRenderer>();
+            LineRenderer line = indicator.AimLine;
             Assert.Greater(line.positionCount, 2);
             Assert.AreEqual(0f, line.GetPosition(0).x, 0.01f);
             Assert.AreEqual(5f, line.GetPosition(line.positionCount - 1).x, 0.01f);
@@ -263,21 +264,21 @@ namespace TheSpaceBetween.Tests
             SwapAbility player = CreatePlayer();
             CreateTarget(new Vector3(3f, 0f, 0f), "Front");
             CreateTarget(new Vector3(6f, 0f, 0f), "Back");
-            SwapTargetIndicator indicator = AddIndicator(player, SwapIndicatorStyle.Straight);
+            SwapFeedback indicator = AddIndicator(player, SwapIndicatorStyle.Straight);
 
             yield return null;
             yield return null;
 
-            LineRenderer line = indicator.GetComponent<LineRenderer>();
+            LineRenderer line = indicator.AimLine;
             Assert.AreEqual(player.Target.Center.x, line.GetPosition(1).x, 0.01f);
             Assert.AreEqual("Front", player.Target.name);
         }
 
-        private SwapTargetIndicator AddIndicator(SwapAbility player, SwapIndicatorStyle style)
+        private SwapFeedback AddIndicator(SwapAbility player, SwapIndicatorStyle style)
         {
             player.gameObject.SetActive(false);
-            SwapTargetIndicator indicator = player.gameObject.AddComponent<SwapTargetIndicator>();
-            indicator.Style = style;
+            SwapFeedback indicator = player.gameObject.AddComponent<SwapFeedback>();
+            indicator.LineStyle = style;
             player.gameObject.SetActive(true);
             return indicator;
         }

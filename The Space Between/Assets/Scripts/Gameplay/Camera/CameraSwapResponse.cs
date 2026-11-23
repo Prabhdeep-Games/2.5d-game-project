@@ -33,7 +33,6 @@ namespace TheSpaceBetween
         private CinemachineCamera cinemachineCamera;
         private Transform player;
         private Vector3 lastPlayerPosition;
-        private SmoothSwapAbility smoothAbility;
 
         //==================== LIFECYCLE =====================
         private void Awake()
@@ -57,16 +56,8 @@ namespace TheSpaceBetween
             player = ability.transform;
             lastPlayerPosition = player.position;
 
-            // A smooth swap moves the player part way through, so wait until it has finished.
-            smoothAbility = ability as SmoothSwapAbility;
-            if (smoothAbility != null)
-            {
-                smoothAbility.SwapCompleted += OnSwapFinished;
-            }
-            else
-            {
-                ability.Swapped += OnSwapFinished;
-            }
+            // A Shrink swap moves the player part way through, so wait until both bodies have arrived.
+            ability.SwapCompleted += OnSwapFinished;
         }
 
         private void OnDisable()
@@ -76,14 +67,7 @@ namespace TheSpaceBetween
                 return;
             }
 
-            if (smoothAbility != null)
-            {
-                smoothAbility.SwapCompleted -= OnSwapFinished;
-            }
-            else
-            {
-                ability.Swapped -= OnSwapFinished;
-            }
+            ability.SwapCompleted -= OnSwapFinished;
         }
 
         private void LateUpdate()
