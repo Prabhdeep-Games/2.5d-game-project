@@ -6,6 +6,11 @@ namespace TheSpaceBetween
     /// <summary>
     /// A sealed door that slides open once a control panel powers it or a script calls Unlock.
     /// A security camera lockdown keeps it closed, and it never closes onto the player or a crate.
+    ///
+    /// With an Unlock Animator (the Security Door), opening has two steps: the lock animation plays first, then the
+    /// door slides. Closing runs the other way round: the door slides shut and blocks straight away, then the lock
+    /// animation plays backwards. The door poses the animation itself from one number, so a door that is told to open
+    /// while it is still relocking simply turns round, with no jump.
     /// </summary>
     public class AccessDoor : Mechanism
     {
@@ -39,6 +44,17 @@ namespace TheSpaceBetween
         [Tooltip("Seconds the door needs to travel between closed and open.")]
         [SerializeField, Min(0.01f)] private float travelTime = 1f;
 
+        //==================== UNLOCK ANIMATION =====================
+        [Header("Unlock Animation")]
+        [Tooltip("Optional. Plays the state below before the door moves, and backwards after it has closed. Empty: the door only slides.")]
+        [SerializeField] private Animator unlockAnimator;
+
+        [Tooltip("The Animator state that holds the unlock animation, played from its start (locked) to its end (unlocked).")]
+        [SerializeField] private string unlockState = "Open";
+
+        [Tooltip("Playback speed of the unlock animation. 1 is the speed it was animated at; above 1 is faster.")]
+        [SerializeField, Min(0.1f)] private float animationSpeed = 1.5f;
+
         //==================== EVENTS =====================
         [Header("Events")]
         [Tooltip("Invoked when the door finishes opening.")]
@@ -58,10 +74,15 @@ namespace TheSpaceBetween
         [Tooltip("Whether the door is waiting because something is standing where it would close.")]
         [ReadOnly, SerializeField] private bool isObstructed;
 
+        [Tooltip("How far the unlock animation has played: 0 locked, 1 unlocked.")]
+        [ReadOnly, SerializeField, Range(0f, 1f)] private float unlockProgress;
+
         private Vector3 closedLocalPosition;
         private Vector3 openLocalPosition;
         private float speed;
         private Collider doorCollider;
+        private int unlockStateHash;
+        private float unlockSeconds;
 
         //==================== PUBLIC =====================
         /// <summary>Locked means unpowered. A door in lockdown is not locked, but still refuses to open.</summary>
@@ -71,6 +92,14 @@ namespace TheSpaceBetween
 
         /// <summary>True while the door waits for something to leave the doorway before closing.</summary>
         public bool IsObstructed => isObstructed;
+
+        /// <summary>How far the unlock animation has played: 0 locked, 1 unlocked. Always 1 without an animation.</summary>
+        public float UnlockProgress => HasUnlockAnimation ? unlockProgress : 1f;
+
+        /// <summary>Seconds the unlock animation takes at its playback speed. 0 without an animation.</summary>
+        public float UnlockSeconds => unlockSeconds;
+
+        private bool HasUnlockAnimation => unlockSeconds > 0f;
 
         /// <summary>Unlocks the door, and opens it when "Opens When Unlocked" is on.</summary>
         public void Unlock()
@@ -145,23 +174,94 @@ namespace TheSpaceBetween
             openLocalPosition = closedLocalPosition + openOffset;
             speed = openOffset.magnitude / travelTime;
             doorCollider = GetComponent<Collider>();
+            PrepareUnlockAnimation();
 
-            if (startsOpen && !startsLocked)
+            bool open = startsOpen && !startsLocked;
+            if (open)
             {
                 transform.localPosition = openLocalPosition;
                 state = DoorState.Open;
             }
+
+            unlockProgress = open ? 1f : 0f;
+            PoseUnlockAnimation();
         }
 
         private void Update()
         {
             isObstructed = false;
-            if (state != DoorState.Opening && state != DoorState.Closing)
+            switch (state)
+            {
+                case DoorState.Opening:
+                    if (StepUnlockAnimation(unlocking: true))
+                    {
+                        Slide(opening: true);
+                    }
+
+                    break;
+
+                case DoorState.Closing:
+                    Slide(opening: false);
+                    break;
+
+                case DoorState.Closed:
+                    // Shut and blocking already; the lock turns back as the finishing touch.
+                    StepUnlockAnimation(unlocking: false);
+                    break;
+            }
+        }
+
+        //==================== UNLOCK ANIMATION =====================
+        // The Animator never plays on its own: speed 0, posed by the door, so door and animation cannot drift apart.
+        private void PrepareUnlockAnimation()
+        {
+            unlockSeconds = 0f;
+            if (unlockAnimator == null || unlockAnimator.runtimeAnimatorController == null)
             {
                 return;
             }
 
-            bool opening = state == DoorState.Opening;
+            float clipSeconds = 0f;
+            foreach (AnimationClip clip in unlockAnimator.runtimeAnimatorController.animationClips)
+            {
+                clipSeconds = Mathf.Max(clipSeconds, clip.length);
+            }
+
+            unlockStateHash = Animator.StringToHash(unlockState);
+            unlockSeconds = clipSeconds / animationSpeed;
+            unlockAnimator.speed = 0f;
+        }
+
+        // Moves the animation one frame toward unlocked or locked. True once it is there, or when there is no animation.
+        private bool StepUnlockAnimation(bool unlocking)
+        {
+            if (!HasUnlockAnimation)
+            {
+                return true;
+            }
+
+            float target = unlocking ? 1f : 0f;
+            if (unlockProgress == target)
+            {
+                return true;
+            }
+
+            unlockProgress = Mathf.MoveTowards(unlockProgress, target, Time.deltaTime / unlockSeconds);
+            PoseUnlockAnimation();
+            return unlockProgress == target;
+        }
+
+        private void PoseUnlockAnimation()
+        {
+            if (HasUnlockAnimation)
+            {
+                unlockAnimator.Play(unlockStateHash, 0, unlockProgress);
+            }
+        }
+
+        //==================== SLIDING =====================
+        private void Slide(bool opening)
+        {
             Vector3 target = opening ? openLocalPosition : closedLocalPosition;
             Vector3 next = Vector3.MoveTowards(transform.localPosition, target, speed * Time.deltaTime);
 

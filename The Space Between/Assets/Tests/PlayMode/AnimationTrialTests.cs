@@ -44,7 +44,7 @@ namespace TheSpaceBetween.Tests
         private GameObject player;
         private PlaceholderPlayerController controller;
         private CharacterController capsule;
-        private SmoothSwapAbility ability;
+        private SwapAbility ability;
         private PlayerAnimationDriver driver;
         private SwapArmAim arm;
         private Animator animator;
@@ -98,7 +98,7 @@ namespace TheSpaceBetween.Tests
             Assert.NotNull(player, $"{SceneName} needs a Player.");
             controller = player.GetComponent<PlaceholderPlayerController>();
             capsule = player.GetComponent<CharacterController>();
-            ability = player.GetComponent<SmoothSwapAbility>();
+            ability = player.GetComponent<SwapAbility>();
             driver = player.GetComponent<PlayerAnimationDriver>();
             arm = player.GetComponentInChildren<SwapArmAim>();
             Assert.NotNull(arm, "The character needs a SwapArmAim.");

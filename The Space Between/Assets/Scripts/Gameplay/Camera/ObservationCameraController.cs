@@ -107,8 +107,7 @@ namespace TheSpaceBetween
                 lockedAbilities = new Behaviour[]
                 {
                     player.GetComponent<SwapAbility>(),
-                    player.GetComponent<SwapFeedback>(),
-                    player.GetComponent<SwapTargetIndicator>()
+                    player.GetComponent<SwapFeedback>()
                 };
             }
 
