@@ -782,7 +782,7 @@ namespace TheSpaceBetween.EditorTools
             }
             else if (kind == RoomThreshold.SealedDoor || kind == RoomThreshold.PanelDoor)
             {
-                plan.Prefabs.Add(new PrefabPlan { Prefab = RoomPrefab.SealedDoor, Name = name + " Door", Group = RoomGroup.Openings, Position = new Vector3((x0 + x1) * 0.5f, floorY + DoorCenterHeight, 0f) });
+                plan.Prefabs.Add(new PrefabPlan { Prefab = RoomPrefab.SecurityDoor, Name = name + " Door", Group = RoomGroup.Openings, Position = new Vector3((x0 + x1) * 0.5f, floorY + DoorCenterHeight, 0f) });
             }
         }
 

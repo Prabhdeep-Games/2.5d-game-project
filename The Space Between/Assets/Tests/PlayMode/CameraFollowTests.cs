@@ -34,6 +34,7 @@ namespace TheSpaceBetween.Tests
             playerObject.SetActive(false);
             playerObject.AddComponent<ConstantMover>().Velocity = Vector3.right * PlayerSpeed;
             ability = playerObject.AddComponent<SwapAbility>();
+            ability.Motion = SwapMotion.Instant;
             SetField(ability, "aimMode", SwapAimMode.Nearest);
             playerObject.SetActive(true);
             player = playerObject.transform;

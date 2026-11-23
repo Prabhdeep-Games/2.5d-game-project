@@ -29,7 +29,7 @@ namespace TheSpaceBetween.EditorTools
 
         private static readonly Dictionary<RoomPrefab, string> PrefabPaths = new Dictionary<RoomPrefab, string>
         {
-            { RoomPrefab.SealedDoor, EnvironmentFolder + "Sealed Door.prefab" },
+            { RoomPrefab.SecurityDoor, EnvironmentFolder + "Security Door.prefab" },
             { RoomPrefab.ControlPanel, EnvironmentFolder + "Control Panel.prefab" },
             { RoomPrefab.GlassPartition, EnvironmentFolder + "Glass Partition.prefab" },
             { RoomPrefab.IndustrialBarrier, EnvironmentFolder + "Industrial Barrier.prefab" },

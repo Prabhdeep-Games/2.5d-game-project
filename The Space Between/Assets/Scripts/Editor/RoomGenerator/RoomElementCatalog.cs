@@ -68,10 +68,12 @@ namespace TheSpaceBetween.EditorTools
             // Security and access: being watched and kept out.
             new Entry { Category = Category.SecurityAndAccess, Name = "Security Camera", Path = Environment + "Security Camera.prefab", Placement = Placement.Ceiling,
                 Description = "Watches a cone below it and finds the player by itself. Add doors to Locks Down to seal them while it sees the player." },
+            new Entry { Category = Category.SecurityAndAccess, Name = "Security Door", Path = Environment + "Security Door.prefab", Placement = Placement.Floor,
+                Description = "The level's door. Stays shut until it is powered, then turns its lock and rises. Add it to the Targets of a Control Panel or Pressure Pad." },
             new Entry { Category = Category.SecurityAndAccess, Name = "Sealed Door", Path = Environment + "Sealed Door.prefab", Placement = Placement.Floor,
-                Description = "Stays shut until it is powered. Add it to the Targets of a Control Panel or Pressure Pad." },
+                Description = "The plain sliding door, without the lock animation. Stays shut until it is powered. Add it to the Targets of a Control Panel or Pressure Pad." },
             new Entry { Category = Category.SecurityAndAccess, Name = "Control Panel", Path = Environment + "Control Panel.prefab", Placement = Placement.Floor,
-                Description = "Press E beside it to switch its Targets. Add a Sealed Door to its Targets to make an access panel." },
+                Description = "Press E beside it to switch its Targets. Add a Security Door to its Targets to make an access panel." },
 
             // Interactive architecture: machinery the player switches.
             new Entry { Category = Category.InteractiveArchitecture, Name = "Movable Platform", Path = Environment + "Movable Platform.prefab", Placement = Placement.Floor,

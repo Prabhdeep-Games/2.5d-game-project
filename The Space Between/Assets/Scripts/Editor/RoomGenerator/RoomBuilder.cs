@@ -366,7 +366,7 @@ namespace TheSpaceBetween.EditorTools
             SecurityCamera securityCamera = null;
             foreach ((PrefabPlan plan, GameObject instance) in prefabs)
             {
-                if (plan.Prefab == RoomPrefab.SealedDoor)
+                if (plan.Prefab == RoomPrefab.SecurityDoor)
                 {
                     var door = instance.GetComponent<AccessDoor>();
                     var so = new SerializedObject(door);

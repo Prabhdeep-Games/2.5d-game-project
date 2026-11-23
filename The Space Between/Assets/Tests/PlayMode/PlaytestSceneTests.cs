@@ -170,9 +170,9 @@ namespace TheSpaceBetween.Tests
             housing2 = Find<Swappable>("Swap Housing 2");
             crate = Find<Swappable>("Swap Crate");
             beacon = Find<Swappable>("Swap Beacon (gap)");
-            doorA = Find<AccessDoor>("Sealed Door (panel)");
-            doorB = Find<AccessDoor>("Sealed Door (pad)");
-            doorC = Find<AccessDoor>("Sealed Door (camera)");
+            doorA = Find<AccessDoor>("Security Door (panel)");
+            doorB = Find<AccessDoor>("Security Door (pad)");
+            doorC = Find<AccessDoor>("Security Door (camera)");
             view = Camera.main;
         }
 
@@ -612,7 +612,7 @@ namespace TheSpaceBetween.Tests
             yield return LoadScene();
             string[] names =
             {
-                "Control Panel", "Pressure Pad", "Elevator Pad", "Sealed Door (panel)", "Sealed Door (pad)", "Sealed Door (camera)",
+                "Control Panel", "Pressure Pad", "Elevator Pad", "Security Door (panel)", "Security Door (pad)", "Security Door (camera)",
                 "Security Camera", "Movable Platform", "Vertical Shaft", "Glass Partition", "Glass Partition 2", "Low Barrier 1",
                 "Swap Crate", "Swap Housing", "Swap Housing 2", "Swap Beacon (gap)", "Shaft Beacon 4", "Falling Obstacle Spawner"
             };

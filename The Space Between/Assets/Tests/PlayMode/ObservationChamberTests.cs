@@ -281,8 +281,8 @@ namespace TheSpaceBetween.Tests
             yield return LoadScene();
             LevelGoal goal = Object.FindAnyObjectByType<LevelGoal>();
             Swappable housing = GameObject.Find("Swap Housing").GetComponent<Swappable>();
-            SwapDisplacementEffect effect = player.GetComponent<SwapDisplacementEffect>();
-            Assert.NotNull(effect, "The player needs the displacement effect.");
+            SwapFeedback effect = player.GetComponent<SwapFeedback>();
+            Assert.NotNull(effect, "The player needs the swap feedback, which plays the displacement.");
 
             // Walking into the glass stops the player.
             yield return Teleport(BesideGlassX);
@@ -308,13 +308,13 @@ namespace TheSpaceBetween.Tests
             Release(mouse.leftButton);
             yield return null;
             Assert.AreEqual(SwapRejection.None, ability.LastResult, "The housing behind the glass should be swappable.");
-            bool effectPlayed = effect.IsPlaying;
+            bool effectPlayed = effect.IsDisplacing;
             float smallest = sizeBefore;
             float start = Time.realtimeSinceStartup;
             while (ability.IsSwapping && Time.realtimeSinceStartup - start < SwapWaitLimitSeconds)
             {
                 smallest = Mathf.Min(smallest, player.transform.localScale.x);
-                effectPlayed |= effect.IsPlaying;
+                effectPlayed |= effect.IsDisplacing;
                 yield return null;
             }
 
@@ -325,7 +325,7 @@ namespace TheSpaceBetween.Tests
             Assert.AreNotEqual(housingFrom, housing.Position);
 
             yield return WaitSeconds(0.6f);
-            Assert.IsFalse(effect.IsPlaying, "The effect must end with the swap.");
+            Assert.IsFalse(effect.IsDisplacing, "The effect must end with the swap.");
             Assert.IsTrue(controller.IsGrounded, "The player should settle on the platform.");
             Assert.AreEqual(PlatformTop + StandingHeight, player.transform.position.y, 0.15f, "Standing on the platform.");
 

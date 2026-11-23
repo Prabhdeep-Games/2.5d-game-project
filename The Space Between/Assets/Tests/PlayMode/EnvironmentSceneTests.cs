@@ -83,7 +83,7 @@ namespace TheSpaceBetween.Tests
             player = GameObject.Find("Player");
             Assert.NotNull(player, $"{SceneName} needs a Player.");
             ability = player.GetComponent<SwapAbility>();
-            Assert.IsInstanceOf<SmoothSwapAbility>(ability, "The element scene is built for the smooth swap.");
+            Assert.AreEqual(SwapMotion.Shrink, ability.Motion, "The element scene is built for the shrinking swap.");
             framing = Object.FindAnyObjectByType<CameraWallRunFraming>();
             view = Camera.main;
             closestToScreenEdge = 1f;

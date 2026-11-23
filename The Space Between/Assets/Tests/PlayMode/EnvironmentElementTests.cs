@@ -99,6 +99,7 @@ namespace TheSpaceBetween.Tests
             SetField(controller, "runAction", new InputAction("Run", InputActionType.Button, "<Keyboard>/leftShift"));
 
             ability = playerObject.AddComponent<SwapAbility>();
+            ability.Motion = SwapMotion.Instant;
             SetField(ability, "sightBlockers", SeeThroughGlass);
 
             playerObject.SetActive(true);

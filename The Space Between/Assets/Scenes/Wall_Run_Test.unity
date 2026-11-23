@@ -647,12 +647,10 @@ GameObject:
   - component: {fileID: 211780664}
   - component: {fileID: 211780667}
   - component: {fileID: 211780668}
-  - component: {fileID: 211780669}
   - component: {fileID: 211780673}
   - component: {fileID: 211780672}
   - component: {fileID: 211780671}
   - component: {fileID: 211780663}
-  - component: {fileID: 211780670}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -867,6 +865,15 @@ MonoBehaviour:
       m_Action: Run
       m_Flags: 0
     m_Flags: 0
+  slideAction:
+    m_Name: Slide
+    m_Type: 1
+    m_ExpectedControlType: 
+    m_Id: 7578875e-68c5-4c6d-97c2-8c18b7bde89b
+    m_Processors: 
+    m_Interactions: 
+    m_SingletonActionBindings: []
+    m_Flags: 0
   moveSpeed: 6
   runSpeed: 10
   jumpHeight: 1.8
@@ -875,17 +882,28 @@ MonoBehaviour:
   maxWallRunSurfaceAngle: 100
   wallSlideSpeed: 2
   wallJumpAwaySpeed: 9
+  slideEnabled: 1
+  minSlideEntrySpeed: 4
+  slideBoost: 1.15
+  slideFriction: 8
+  slideEndSpeed: 3
+  slideHeight: 1
+  slideBodyDrop: 0.5
   body: {fileID: 2120693012}
   bodyTurnSpeed: 12
   drawGizmos: 1
   logWallJumps: 1
   isGrounded: 0
   isRunning: 0
+  isSliding: 0
+  slideSpeed: 0
   isWallRunning: 0
   surfaceSpeed: 0
   verticalSpeed: 0
+  lastFallHeight: 0
   airJumpsLeft: 0
   lastWallJump: none yet
+  controlLocked: 0
 --- !u!114 &211780668
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -971,17 +989,8 @@ MonoBehaviour:
   clearanceLayers:
     serializedVersion: 2
     m_Bits: 4294967295
-  swappedEvent:
-    m_PersistentCalls:
-      m_Calls: []
-  rejectedEvent:
-    m_PersistentCalls:
-      m_Calls: []
-  logAttempts: 1
-  drawGizmos: 1
-  lastResult: 0
-  currentTarget: {fileID: 0}
-  currentStatus: 0
+  gestureSeconds: 0
+  motion: 0
   shrinkTime: 0.15
   growTime: 0.15
   smallestScale: 0.05
@@ -1009,145 +1018,20 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+  swappedEvent:
+    m_PersistentCalls:
+      m_Calls: []
   swapCompletedEvent:
     m_PersistentCalls:
       m_Calls: []
---- !u!114 &211780669
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 211780655}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e7f779ecde5677447afb2089ffbd913a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: TheSpaceBetween.Runtime::TheSpaceBetween.SwapTargetIndicator
-  ability: {fileID: 211780668}
-  style: 1
-  width: 0.16
-  validColor: {r: 0.3, g: 1, b: 0.5, a: 0.9}
-  rejectedColor: {r: 1, g: 0.35, b: 0.3, a: 0.9}
-  noTargetColor: {r: 1, g: 1, b: 1, a: 0.25}
-  showAimWithoutTarget: 1
-  lineMaterial: {fileID: 2100000, guid: 96bc778d024c8644c871d1f25508711c, type: 2}
-  wobblePoints: 31
-  wobbleAmplitude: 0.14
-  wobbleWavelength: 1.6
-  wobbleSpeed: 1.2
-  pinEnds: 1
+  rejectedEvent:
+    m_PersistentCalls:
+      m_Calls: []
+  logAttempts: 1
   drawGizmos: 1
---- !u!120 &211780670
-LineRenderer:
-  serializedVersion: 3
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 211780655}
-  m_Enabled: 1
-  m_CastShadows: 1
-  m_ReceiveShadows: 1
-  m_DynamicOccludee: 1
-  m_StaticShadowCaster: 0
-  m_MotionVectors: 0
-  m_LightProbeUsage: 0
-  m_ReflectionProbeUsage: 0
-  m_RayTracingMode: 0
-  m_RayTraceProcedural: 0
-  m_RayTracingAccelStructBuildFlagsOverride: 0
-  m_RayTracingAccelStructBuildFlags: 1
-  m_SmallMeshCulling: 1
-  m_ForceMeshLod: -1
-  m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
-  m_RendererPriority: 0
-  m_Materials:
-  - {fileID: 0}
-  m_StaticBatchInfo:
-    firstSubMesh: 0
-    subMeshCount: 0
-  m_StaticBatchRoot: {fileID: 0}
-  m_ProbeAnchor: {fileID: 0}
-  m_LightProbeVolumeOverride: {fileID: 0}
-  m_ScaleInLightmap: 1
-  m_ReceiveGI: 1
-  m_PreserveUVs: 0
-  m_IgnoreNormalsForChartDetection: 0
-  m_ImportantGI: 0
-  m_StitchLightmapSeams: 1
-  m_SelectedEditorRenderState: 3
-  m_MinimumChartSize: 4
-  m_AutoUVMaxDistance: 0.5
-  m_AutoUVMaxAngle: 89
-  m_LightmapParameters: {fileID: 0}
-  m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
-  m_SortingOrder: 0
-  m_MaskInteraction: 0
-  m_Positions:
-  - {x: 0, y: 0, z: 0}
-  - {x: 0, y: 0, z: 1}
-  m_Parameters:
-    serializedVersion: 3
-    widthMultiplier: 1
-    widthCurve:
-      serializedVersion: 2
-      m_Curve:
-      - serializedVersion: 3
-        time: 0
-        value: 1
-        inSlope: 0
-        outSlope: 0
-        tangentMode: 0
-        weightedMode: 0
-        inWeight: 0.33333334
-        outWeight: 0.33333334
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    colorGradient:
-      serializedVersion: 2
-      key0: {r: 1, g: 1, b: 1, a: 1}
-      key1: {r: 1, g: 1, b: 1, a: 1}
-      key2: {r: 0, g: 0, b: 0, a: 0}
-      key3: {r: 0, g: 0, b: 0, a: 0}
-      key4: {r: 0, g: 0, b: 0, a: 0}
-      key5: {r: 0, g: 0, b: 0, a: 0}
-      key6: {r: 0, g: 0, b: 0, a: 0}
-      key7: {r: 0, g: 0, b: 0, a: 0}
-      ctime0: 0
-      ctime1: 65535
-      ctime2: 0
-      ctime3: 0
-      ctime4: 0
-      ctime5: 0
-      ctime6: 0
-      ctime7: 0
-      atime0: 0
-      atime1: 65535
-      atime2: 0
-      atime3: 0
-      atime4: 0
-      atime5: 0
-      atime6: 0
-      atime7: 0
-      m_Mode: 0
-      m_ColorSpace: -1
-      m_NumColorKeys: 2
-      m_NumAlphaKeys: 2
-    numCornerVertices: 0
-    numCapVertices: 0
-    alignment: 0
-    textureMode: 0
-    textureScale: {x: 1, y: 1}
-    shadowBias: 0.5
-    generateLightingData: 0
-  m_UseWorldSpace: 1
-  m_Loop: 0
-  m_ApplyActiveColorSpace: 1
+  lastResult: 0
+  currentTarget: {fileID: 0}
+  currentStatus: 0
 --- !u!114 &211780671
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1161,12 +1045,24 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: TheSpaceBetween.Runtime::TheSpaceBetween.SwapFeedback
   ability: {fileID: 211780668}
+  validColor: {r: 0.3, g: 1, b: 0.5, a: 1}
+  rejectedColor: {r: 1, g: 0.35, b: 0.3, a: 1}
+  showAimLine: 1
+  lineStyle: 1
+  lineWidth: 0.16
+  lineOpacity: 0.9
+  lineMaterial: {fileID: 2100000, guid: 96bc778d024c8644c871d1f25508711c, type: 2}
+  showLineWithoutTarget: 1
+  noTargetLineColor: {r: 1, g: 1, b: 1, a: 0.25}
+  wobblePoints: 31
+  wobbleAmplitude: 0.14
+  wobbleWavelength: 1.6
+  wobbleSpeed: 1.2
+  pinWobbleEnds: 1
   highlightInRange: 1
   inRangeColor: {r: 0.35, g: 0.85, b: 1, a: 1}
   inRangeStrength: 0.35
   pulseSpeed: 1.2
-  validColor: {r: 0.3, g: 1, b: 0.5, a: 1}
-  rejectedColor: {r: 1, g: 0.35, b: 0.3, a: 1}
   aimedStrength: 0.6
   showReason: 1
   reasonSeconds: 1.8
@@ -1174,11 +1070,19 @@ MonoBehaviour:
   reasonSize: 0.1
   flashColor: {r: 1, g: 1, b: 1, a: 1}
   flashSeconds: 0.35
+  showDisplacement: 0
+  silhouetteMaterial: {fileID: 0}
+  silhouetteColor: {r: 0.66, g: 0.86, b: 0.88, a: 1}
+  silhouetteSeparation: 0.22
+  silhouetteScale: 1.06
+  silhouetteOpacity: 0.75
   audioSource: {fileID: 0}
   swapClip: {fileID: 0}
   rejectClip: {fileID: 0}
+  drawGizmos: 1
   lastMessage: none yet
   objectsInRange: 0
+  isDisplacing: 0
 --- !u!114 &211780672
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1216,8 +1120,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: TheSpaceBetween.Runtime::TheSpaceBetween.PlayerAnimationDriver
   animator: {fileID: 2120693015}
   minLandingSpeed: 4
+  hardLandingHeight: 6
+  speedDampSeconds: 0
   logTriggers: 0
   currentState: none
+  lastLanding: none yet
 --- !u!1001 &219838080
 PrefabInstance:
   m_ObjectHideFlags: 0

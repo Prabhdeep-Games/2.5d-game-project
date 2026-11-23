@@ -19,7 +19,8 @@ namespace TheSpaceBetween.EditorTools
     /// <summary>The existing prefabs a plan can ask for.</summary>
     public enum RoomPrefab
     {
-        SealedDoor,
+        /// <summary>The door of a Sealed or Panel Door threshold: the Security Door, opened by AccessDoor.</summary>
+        SecurityDoor,
         ControlPanel,
         GlassPartition,
         IndustrialBarrier,
