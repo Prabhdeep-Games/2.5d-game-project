@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 7096931497934412337}
   - component: {fileID: 2677534194331037991}
   - component: {fileID: 6307615360193042130}
+  - component: {fileID: 5149808813764290363}
   m_Layer: 0
   m_Name: CM Follow Camera
   m_TagString: Untagged
@@ -154,7 +155,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: TheSpaceBetween.Runtime::TheSpaceBetween.CameraSwapResponse
   ability: {fileID: 0}
   cutOnSwap: 1
+  leanTowardTarget: 1
   logWarps: 0
+  leanWeight: 0
 --- !u!114 &6307615360193042130
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -174,6 +177,25 @@ MonoBehaviour:
   zoneBlendSpeed: 8
   framingWeight: 0
   zoneDistance: 0
+--- !u!114 &5149808813764290363
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3761670213151292003}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0544e7b14d134a1449e61175446cfb95, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineRecomposer
+  ApplyAfter: 3
+  Tilt: 0
+  Pan: 0
+  Dutch: 0
+  ZoomScale: 1
+  FollowAttachment: 1
+  LookAtAttachment: 1
 --- !u!1 &4026362636668215838
 GameObject:
   m_ObjectHideFlags: 0

@@ -15,12 +15,12 @@ RenderSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 10
   m_Fog: 0
-  m_FogColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-  m_FogMode: 3
-  m_FogDensity: 0.01
+  m_FogColor: {r: 0, g: 0.21596515, b: 0.3509434, a: 1}
+  m_FogMode: 1
+  m_FogDensity: 0.02
   m_LinearFogStart: 0
-  m_LinearFogEnd: 300
-  m_AmbientSkyColor: {r: 0.2901961, g: 0.32156864, b: 0.3372549, a: 1}
+  m_LinearFogEnd: 45.4
+  m_AmbientSkyColor: {r: 0, g: 0, b: 0, a: 1}
   m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
   m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
   m_AmbientIntensity: 1
@@ -2199,7 +2199,7 @@ Transform:
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.11, y: 18.974316, z: -24}
+  m_LocalPosition: {x: -3.6, y: 6.7443156, z: -24}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -7761,13 +7761,17 @@ PrefabInstance:
       propertyPath: m_Name
       value: Player
       objectReference: {fileID: 0}
+    - target: {fileID: 459491792036257993, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 1317643903260183155, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -0.11
+      value: -3.6
       objectReference: {fileID: 0}
     - target: {fileID: 1317643903260183155, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 14.73
+      value: 2.5
       objectReference: {fileID: 0}
     - target: {fileID: 1317643903260183155, guid: 6f5439247e5947040809a0a9635ce952, type: 3}
       propertyPath: m_LocalPosition.z
@@ -9316,6 +9320,127 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!1 &1290725927
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1290725929}
+  - component: {fileID: 1290725928}
+  m_Layer: 0
+  m_Name: Room_ObservationChamber_54
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1290725928
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1290725927}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5df4191c003f1444dba9c813da6cbff6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: TheSpaceBetween.Runtime::TheSpaceBetween.GeneratedRoom
+  settings:
+    purpose: 0
+    seed: 54
+    width: 96
+    height: 28.84
+    depth: 7.03
+    wallThickness: 1.43
+    wallFinish: 0
+    floorFinish: 0
+    ceilingFinish: 0
+    bayWidth: 12.28
+    pilasterDepth: 2.124
+    ceilingBeams: 1
+    recessedBays: 3
+    repairPanels: 5
+    entrance: 2
+    exit: 4
+    openingHeight: 4.37
+    interiorThresholds: 1
+    levelChange: 3
+    exitRise: 24
+    glassPartition: 1
+    partitionPosition: 0.5
+    lowBarriers: 0
+    observationGallery: 1
+    galleryBays: 2
+    gallerySill: 8
+    securityCamera: 0
+    cameraPosition: 0.5
+    cameraLocksExit: 0
+    platforming: 1
+    floorGaps: 1
+    gapWidth: 7
+    crumblingBridges: 1
+    crumbleDelay: 0.8
+    slideHoods: 1
+    hoodLength: 3
+    debrisDrops: 0
+    debrisInterval: 1.57
+    roomRestart: 1
+    chasePath: 0
+    lightingMode: 0
+    ceilingFixtures: 1
+    wallFixtures: 0
+    fixtureEveryBays: 1
+    brightness: 0.55
+    fillLevel: 0.203
+    lightColor: {r: 0.89, g: 0.922, b: 0.929, a: 1}
+    spotAngle: 108.3
+    shadowCasters: 1
+    failedFixtures: 0
+    brightnessVariation: 0.106
+    galleryBrightness: 0.8
+    reflectionProbe: 1
+    sceneFog: 1
+    fogMode: 1
+    fogColor: {r: 0, g: 0.21596515, b: 0.3509434, a: 1}
+    fogStart: 0
+    fogEnd: 45.4
+    fogDensity: 0.02
+    sceneAmbient: 1
+    ambientColor: {r: 0, g: 0, b: 0, a: 1}
+  exitOffset: {x: 96, y: 0, z: 0}
+  generatedObjects: []
+  changedGlobalLighting: 0
+  globalLightingBefore:
+    ambientMode: 3
+    ambientColor: {r: 0, g: 0, b: 0, a: 1}
+    fog: 1
+    fogColor: {r: 0, g: 0.21596515, b: 0.3509434, a: 1}
+    fogDensity: 0.02
+    fogMode: 1
+    fogStart: 0
+    fogEnd: 45.4
+  builtSignature: '{"purpose":0,"seed":54,"width":96.0,"height":28.84000015258789,"depth":7.03000020980835,"wallThickness":1.4299999475479127,"wallFinish":0,"floorFinish":0,"ceilingFinish":0,"bayWidth":12.279999732971192,"pilasterDepth":2.124000072479248,"ceilingBeams":true,"recessedBays":3,"repairPanels":5,"entrance":2,"exit":4,"openingHeight":4.369999885559082,"interiorThresholds":1,"levelChange":3,"exitRise":24.0,"glassPartition":true,"partitionPosition":0.5,"lowBarriers":0,"observationGallery":true,"galleryBays":2,"gallerySill":8.0,"securityCamera":false,"cameraPosition":0.5,"cameraLocksExit":false,"platforming":true,"floorGaps":1,"gapWidth":7.0,"crumblingBridges":true,"crumbleDelay":0.800000011920929,"slideHoods":1,"hoodLength":3.0,"debrisDrops":0,"debrisInterval":1.5700000524520875,"roomRestart":true,"chasePath":false,"lightingMode":0,"ceilingFixtures":true,"wallFixtures":false,"fixtureEveryBays":1,"brightness":0.550000011920929,"fillLevel":0.2029999941587448,"lightColor":{"r":0.8899999856948853,"g":0.921999990940094,"b":0.9290000200271606,"a":1.0},"spotAngle":108.30000305175781,"shadowCasters":1,"failedFixtures":0.0,"brightnessVariation":0.10599999874830246,"galleryBrightness":0.800000011920929,"reflectionProbe":true,"sceneFog":true,"fogMode":1,"fogColor":{"r":0.0,"g":0.2159651517868042,"b":0.350943386554718,"a":1.0},"fogStart":0.0,"fogEnd":45.400001525878909,"fogDensity":0.019999999552965165,"sceneAmbient":true,"ambientColor":{"r":0.0,"g":0.0,"b":0.0,"a":1.0}}True'
+  isCleared: 0
+  drawGizmos: 1
+--- !u!4 &1290725929
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1290725927}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 332.9, y: 12, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1300230411
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -9407,6 +9532,7 @@ GameObject:
   - component: {fileID: 1329613162}
   - component: {fileID: 1329613157}
   - component: {fileID: 1329613161}
+  - component: {fileID: 1329613163}
   m_Layer: 0
   m_Name: CM Follow Camera
   m_TagString: Untagged
@@ -9428,7 +9554,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: TheSpaceBetween.Runtime::TheSpaceBetween.CameraSwapResponse
   ability: {fileID: 211780668}
   cutOnSwap: 1
+  leanTowardTarget: 1
   logWarps: 0
+  leanWeight: 0
 --- !u!114 &1329613158
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9512,7 +9640,7 @@ Transform:
   m_GameObject: {fileID: 1329613156}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.11, y: 18.974316, z: -24}
+  m_LocalPosition: {x: -3.6, y: 6.7443156, z: -24}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -9567,6 +9695,25 @@ MonoBehaviour:
       m_Bits: 27
     MaximumRaycast: 10
     Damping: 0.5
+--- !u!114 &1329613163
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1329613156}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0544e7b14d134a1449e61175446cfb95, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Cinemachine::Unity.Cinemachine.CinemachineRecomposer
+  ApplyAfter: 3
+  Tilt: 0
+  Pan: 0
+  Dutch: 0
+  ZoomScale: 1
+  FollowAttachment: 1
+  LookAtAttachment: 1
 --- !u!1 &1344885372
 GameObject:
   m_ObjectHideFlags: 0
@@ -12471,6 +12618,51 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4961504484141759716, guid: 2c18c17feb0868a4b8a974f9f0c70dff, type: 3}
   m_PrefabInstance: {fileID: 1857721220}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1865110951
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1865110953}
+  - component: {fileID: 1865110952}
+  m_Layer: 0
+  m_Name: Level Profile
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1865110952
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1865110951}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 009393f6e0fccc64894c6735210deceb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: TheSpaceBetween.Runtime::TheSpaceBetween.LevelProfile
+  isPuzzleLevel: 0
+--- !u!4 &1865110953
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1865110951}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1865339830
 GameObject:
   m_ObjectHideFlags: 0
@@ -14369,3 +14561,5 @@ SceneRoots:
   - {fileID: 832575519}
   - {fileID: 1075260098}
   - {fileID: 1829052622}
+  - {fileID: 1865110953}
+  - {fileID: 1290725929}

@@ -11,7 +11,7 @@ namespace TheSpaceBetween.EditorTools
     ///   2. Turns on Loop Pose for the looping Mixamo clips, so their seams do not pop.
     ///   3. Makes Protagonist.controller from animation_Trial.controller (all the Mixamo clips in one controller), with
     ///      the walk and run speeds matched to the movement. The fall is the plain Mixamo fall, with the same blends as
-    ///      animation_Trial.controller.
+    ///      animation_Trial.controller. The wall run uses the same Running and Fast Run as the ground, with no fall in it.
     ///   4. Makes the Protagonist prefab: the rigged model with its Animator, CharacterFacing and SwapArmAim, and the
     ///      textured Head, Clothes and Hair materials when the textured mesh exists (grey CHR_Jacket otherwise).
     /// Running it again updates what is already there. animation_Trial.controller itself is never changed.
@@ -172,6 +172,7 @@ namespace TheSpaceBetween.EditorTools
                 Child(fastRun, SprintThreshold, SprintTimeScale, SprintCycleOffset),
             };
             EditorUtility.SetDirty(tree);
+            BuildWallRun(machine, tree);
 
             // The fall is the plain Mixamo fall, blended in and out exactly as in animation_Trial.controller.
             fall.motion = FindMixamoClip("Fall");
@@ -190,6 +191,45 @@ namespace TheSpaceBetween.EditorTools
             EditorUtility.SetDirty(controller);
             AssetDatabase.SaveAssetIfDirty(controller);
             return controller;
+        }
+
+        // Wall run: the same Running and Fast Run as on the ground, at the same speeds, so running up a wall looks like
+        // running and not like a slow jog. Standing still on a wall keeps the running cycle; there is no Fall in this tree,
+        // so the fall only plays once the player has let go of the wall. Traverse (the body turning along a curve) uses it too.
+        private static void BuildWallRun(AnimatorStateMachine machine, BlendTree locomotion)
+        {
+            AnimatorState wallRun = FindState(machine, "WallRun");
+            if (wallRun == null)
+            {
+                Debug.LogWarning("Protagonist: the controller has no WallRun state, so the wall run animation was not set up.");
+                return;
+            }
+
+            // The tree copied from animation_Trial.controller lives inside this controller, so it is reused and renamed.
+            var tree = wallRun.motion as BlendTree;
+            if (tree == null || AssetDatabase.GetAssetPath(tree) != ControllerPath)
+            {
+                tree = new BlendTree { hideFlags = HideFlags.HideInHierarchy };
+                AssetDatabase.AddObjectToAsset(tree, ControllerPath);
+            }
+
+            tree.name = "Wall Run";
+            tree.blendType = BlendTreeType.Simple1D;
+            tree.blendParameter = "Speed";
+            tree.useAutomaticThresholds = false;
+            // Copied from the ground's running children, so the two always match, whatever they are tuned to.
+            tree.children = locomotion.children.Where(child => child.threshold >= JogThreshold).ToArray();
+            EditorUtility.SetDirty(tree);
+
+            wallRun.motion = tree;
+            wallRun.speed = 1f;
+
+            AnimatorState traverse = FindState(machine, "Traverse");
+            if (traverse != null)
+            {
+                traverse.motion = tree;
+                traverse.speed = 1f;
+            }
         }
 
         // Protagonist.controller started as a copy, so its states list their transitions in the same order as the source.

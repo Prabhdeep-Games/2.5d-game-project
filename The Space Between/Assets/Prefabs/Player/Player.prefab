@@ -238,14 +238,17 @@ MonoBehaviour:
   runSpeed: 7.6
   jumpHeight: 1.8
   gravity: 25
+  airControlSeconds: 0.25
   wallRunEnabled: 1
   maxWallRunSurfaceAngle: 100
   wallSlideSpeed: 2
-  wallJumpAwaySpeed: 9
+  letGoPushDistance: 0.76
+  wallTopLift: 2
+  wallJumpAwaySpeed: 9.73
   slideEnabled: 1
   minSlideEntrySpeed: 4
   slideBoost: 1.15
-  slideFriction: 8
+  slideFriction: 6
   slideEndSpeed: 3
   slideHeight: 1
   slideBodyDrop: 0
@@ -335,7 +338,7 @@ MonoBehaviour:
       m_Action: Pointer
       m_Flags: 0
     m_Flags: 0
-  aimMode: 2
+  aimMode: 0
   aimRadius: 0.35
   stickDeadZone: 0.3
   aimCamera: {fileID: 0}
@@ -409,14 +412,14 @@ MonoBehaviour:
   rejectedColor: {r: 0.69, g: 0.42, b: 0.36, a: 1}
   showAimLine: 1
   lineStyle: 1
-  lineWidth: 1.83
+  lineWidth: 0.2
   lineOpacity: 0.7
   lineMaterial: {fileID: 2100000, guid: 96bc778d024c8644c871d1f25508711c, type: 2}
   showLineWithoutTarget: 0
   noTargetLineColor: {r: 1, g: 1, b: 1, a: 0.25}
   wobblePoints: 31
   wobbleAmplitude: 0.14
-  wobbleWavelength: 1.6
+  wobbleWavelength: 1.33
   wobbleSpeed: 1.2
   pinWobbleEnds: 1
   highlightInRange: 1
@@ -456,8 +459,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: TheSpaceBetween.Runtime::TheSpaceBetween.PlayerAnimationDriver
   animator: {fileID: 3252695207274014130}
-  minLandingSpeed: 11
-  hardLandingHeight: 6
+  minLandingSpeed: 2
+  hardLandingHeight: 1.9
   speedDampSeconds: 0.08
   logTriggers: 0
   currentState: none

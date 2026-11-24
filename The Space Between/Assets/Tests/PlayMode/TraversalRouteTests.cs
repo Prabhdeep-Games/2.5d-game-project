@@ -458,34 +458,36 @@ namespace TheSpaceBetween.Tests
             }
 
             // Case 1: the beacon touches the same wall higher up. The run carries on there.
-            // Letting go of run makes the player slide slowly while the camera settles, so the aim is steady.
+            // Run held without a direction holds the player in place while the camera settles, so the aim is steady.
             yield return OntoF2();
-            Release(keyboard.leftShiftKey);
+            Release(keyboard.aKey);
             yield return WaitSeconds(0.6f);
-            Assert.IsTrue(controller.IsWallRunning, "Holding toward F2 without run should slide, still on the wall.");
+            Assert.IsTrue(controller.IsWallRunning, "Holding run without a direction should hold the player on F2.");
             beacon.MoveTo(new Vector3(F2Face + 0.58f, Y + 3.5f, beacon.Position.z));
             Physics.SyncTransforms();
             yield return AimAndClick(beacon);
             Assert.AreEqual(SwapRejection.None, ability.LastResult, "The swap beside the wall should be allowed.");
             yield return null;
             bool keptRunning = controller.IsWallRunning;
-            Press(keyboard.leftShiftKey);
+            Press(keyboard.aKey);
             float fromY = Y;
             yield return WaitSeconds(0.5f);
             float climbed = Y - fromY;
-            report.Append($"beside the wall: still wall running={keptRunning}, climbed {climbed:F2} in 0.5 s after pressing run; ");
+            report.Append($"beside the wall: still wall running={keptRunning}, climbed {climbed:F2} in 0.5 s after pressing the direction again; ");
             Assert.IsTrue(keptRunning && controller.IsWallRunning, "Next to the same surface the wall run should continue. " + report);
-            Assert.Greater(climbed, 2.5f, "And climb again once run is held. " + report);
+            Assert.Greater(climbed, 2.5f, "And climb again once the direction is held. " + report);
 
             // Case 2: the beacon floats near the wall, not touching it. The run ends and the player is not pulled to the wall.
             // The first swap left the beacon on F2, where the player was; it is moved out of the way first.
+            // Letting go of run lets go of F2, which cannot be grabbed again for a moment, so wait that out first.
             yield return ReleaseAll();
+            yield return WaitSeconds(0.4f);
             beacon.MoveTo(new Vector3(F2Face + 2.5f, Ledge2Top + 14f, beacon.Position.z));
             Physics.SyncTransforms();
             yield return OntoF2();
-            yield return ReleaseAll();
+            Release(keyboard.aKey);
             yield return WaitSeconds(0.6f);
-            Assert.IsTrue(controller.IsWallRunning, "Letting go should slide, still on the wall.");
+            Assert.IsTrue(controller.IsWallRunning, "Holding run without a direction should keep the player on the wall.");
             // Close enough that the surface probe still reaches the wall (1.4 from the body's middle), but with a
             // 0.7 gap: the player has not reached it, so the run must end rather than pull the player across.
             beacon.MoveTo(new Vector3(F2Face + 1.3f, Y + 2f, beacon.Position.z));

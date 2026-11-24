@@ -326,34 +326,27 @@ namespace TheSpaceBetween.Tests
 
         //==================== 5: RELEASING INPUT =====================
         [UnityTest]
-        public IEnumerator ReleasingInputOnAWall_SlidesSlowly_ThenTheFloorEndsIt()
+        public IEnumerator ReleasingInputOnAWall_LetsGo_AndTheFallEndsOnTheFloor()
         {
             yield return LoadScene(RightFaces[1] - 2.5f);
             yield return Hold(keyboard.dKey, run: true);
             yield return WaitForWallRun(1f);
             yield return WaitSeconds(0.5f);
+            float letGoY = player.transform.position.y;
             yield return ReleaseAll();
-            yield return WaitSeconds(0.5f);
 
-            float fromY = player.transform.position.y;
-            float fromTime = Time.time;
-            yield return WaitSeconds(0.6f);
-            float sinkSpeed = (fromY - player.transform.position.y) / (Time.time - fromTime);
-
-            Assert.IsTrue(controller.IsWallRunning, "Letting go must keep the player on the wall.");
-            Assert.Less(sinkSpeed, WallSlideSpeed + 0.3f, "The player should slide slowly, not fall.");
-
-            float end = Time.time + 6f;
-            while (controller.IsWallRunning && Time.time < end)
+            Assert.IsFalse(controller.IsWallRunning, "Letting go of run should let go of the wall.");
+            float end = Time.time + 3f;
+            while (!controller.IsGrounded && Time.time < end)
             {
                 yield return null;
             }
 
             yield return WaitSeconds(0.8f);
             Assert.IsFalse(controller.IsWallRunning);
-            Assert.AreEqual(GroundCenterY, player.transform.position.y, 0.2f, "The slide ends on the floor.");
+            Assert.AreEqual(GroundCenterY, player.transform.position.y, 0.2f, "The fall ends on the floor.");
             Assert.Less(BodyLeanFrom(Vector3.up), 2f, "Back upright on the floor.");
-            Assert.Pass($"sinkSpeed={sinkSpeed:F2} u/s");
+            Assert.Pass($"let go at y {letGoY:F2}");
         }
 
         //==================== 6: ANGLE SETTING =====================

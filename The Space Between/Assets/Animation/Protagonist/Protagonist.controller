@@ -139,7 +139,7 @@ AnimatorState:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: Traverse
-  m_Speed: 1.1
+  m_Speed: 1
   m_CycleOffset: 0
   m_Transitions:
   - {fileID: 4110868547850348728}
@@ -154,7 +154,7 @@ AnimatorState:
   m_MirrorParameterActive: 0
   m_CycleOffsetParameterActive: 0
   m_TimeParameterActive: 0
-  m_Motion: {fileID: -203655887218126122, guid: 0afe1307ec467f24dad16975bed7bd78, type: 3}
+  m_Motion: {fileID: -15758770197541661}
   m_Tag: 
   m_SpeedParameter: 
   m_MirrorParameter: 
@@ -589,7 +589,7 @@ AnimatorState:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: WallRun
-  m_Speed: 1
+  m_Speed: 1.13
   m_CycleOffset: 0
   m_Transitions:
   - {fileID: -5494718010051680889}
@@ -709,23 +709,23 @@ BlendTree:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Wall Slide And Run
+  m_Name: Wall Run
   m_Childs:
   - serializedVersion: 2
-    m_Motion: {fileID: -203655887218126122, guid: 9832a4a0900cd8842a9e71717b59f465, type: 3}
-    m_Threshold: 2
+    m_Motion: {fileID: -203655887218126122, guid: 0afe1307ec467f24dad16975bed7bd78, type: 3}
+    m_Threshold: 6
     m_Position: {x: 0, y: 0}
-    m_TimeScale: 1
+    m_TimeScale: 1.4
     m_CycleOffset: 0
-    m_DirectBlendParameter: Blend
+    m_DirectBlendParameter: Speed
     m_Mirror: 0
   - serializedVersion: 2
-    m_Motion: {fileID: -203655887218126122, guid: 0afe1307ec467f24dad16975bed7bd78, type: 3}
-    m_Threshold: 8
+    m_Motion: {fileID: -203655887218126122, guid: 8d23d3774144b6040a165115b835d668, type: 3}
+    m_Threshold: 10
     m_Position: {x: 0, y: 0}
-    m_TimeScale: 1
+    m_TimeScale: 1.7
     m_CycleOffset: 0
-    m_DirectBlendParameter: Blend
+    m_DirectBlendParameter: Speed
     m_Mirror: 0
   m_BlendParameter: Speed
   m_BlendParameterY: Blend

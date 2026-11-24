@@ -13,7 +13,10 @@ namespace TheSpaceBetween
     /// Wall running: while running, pushing into a surface that has a WallRunSurface component and is
     /// steeper than the Character Controller's Slope Limit starts a wall run. The run keeps the speed the
     /// player arrived with and turns it along the surface. Holding run plus either movement key keeps running
-    /// along it at Run Speed; letting go of run or of the movement keys slides slowly down. Jump is the way off: it launches away from the surface, and
+    /// along it at Run Speed. Letting go of run, or of the movement keys, lets go of the surface: a small push away from
+    /// it (Let Go Push Distance), then a normal fall. A surface reached without running (landing on a steep marked slope)
+    /// is slid slowly down instead. Running off the top of a surface adds Wall Top Lift, so the player clears the ledge.
+    /// Jump is the way off: it launches away from the surface, and
     /// movement keys are ignored until the jump ends. If the player's capsule touches another marked surface
     /// during that jump, the wall run continues on it; otherwise the player falls. Landing on a marked steep
     /// surface without running slides the player down it. Running into a ceiling ends the run and the player drops.
@@ -33,6 +36,10 @@ namespace TheSpaceBetween
     /// roll), and only while the player stands on walkable ground.
     /// A plain steep surface without the component is just a wall.
     ///
+    /// Air control: in the air the sideways speed keeps its momentum and the movement keys steer it, reaching Run Speed
+    /// from standing in a quarter of a second, so a jump can be corrected but not reversed on the spot. With no key held
+    /// the momentum fades gradually. A wall jump keeps ignoring the keys until it lands or reaches another surface.
+    ///
     /// It reads its own input actions, so no Player Input component is needed on the player.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
@@ -51,7 +58,8 @@ namespace TheSpaceBetween
         private const float StickSpeed = 2f;                    // Fastest pull toward a surface that curves away.
         private const float GroundProbeDistance = 0.3f;         // How far below the feet walkable ground is looked for.
         private const float MinSlideNormalY = 0.05f;            // A surface must face at least this much upward to be slid down.
-        private const float CarriedMomentumDecay = 6f;          // How fast speed left over from a wall run fades, per second.
+        private const float CarriedMomentumDecay = 6f;          // How fast speed left over from a wall run or slide fades, per second; also momentum in the air with no key held.
+        private const float LetGoSpentSpeed = 0.1f;             // Below this speed away from the surface the push is over and the keys steer again.
         private const float WallJumpScanDistance = 20f;         // How far ahead the debug scan looks for an opposite wall.
         private const float CeilingProbeDistance = 0.2f;        // How far above the head a ceiling is looked for.
         private const float MinCeilingNormalY = 0.5f;           // A ceiling must face at least this much downward.
@@ -91,6 +99,9 @@ namespace TheSpaceBetween
         [Tooltip("Downward acceleration in units per second squared. Use a positive number. Pulls the player down during a wall jump too.")]
         [SerializeField, Min(0.1f)] private float gravity = 25f;
 
+        [Tooltip("Air control: seconds a held movement key takes to bring the player from standing to Run Speed in the air. Reversing takes twice as long. Lower steers more sharply; with no key held the speed fades on its own.")]
+        [SerializeField, Min(0.01f)] private float airControlSeconds = 0.25f;
+
         //==================== WALL RUN =====================
         [Header("Wall Run")]
         [Tooltip("Master switch for wall running.")]
@@ -100,8 +111,14 @@ namespace TheSpaceBetween
         [FormerlySerializedAs("wallRunMaxAngle")]
         [SerializeField, Range(45f, 150f)] private float maxWallRunSurfaceAngle = 100f;
 
-        [Tooltip("How fast the player slides down a surface when run or the movement keys are let go, in units per second. 0 clings in place.")]
+        [Tooltip("How fast the player slides down a surface reached without running, such as a steep marked slope landed on, in units per second. 0 clings in place.")]
         [SerializeField, Min(0f)] private float wallSlideSpeed = 2f;
+
+        [Tooltip("How far, in world units, letting go of run or the movement keys pushes the player away from the surface before the fall.")]
+        [SerializeField, Min(0f)] private float letGoPushDistance = 0.5f;
+
+        [Tooltip("Extra height, in world units, added when running off the top of a surface, on top of what the run speed carries. 0.96 puts the feet about 1 above the ledge at Run Speed 7.6.")]
+        [SerializeField, Min(0f)] private float wallTopLift = 0.96f;
 
         //==================== WALL JUMP =====================
         [Header("Wall Jump")]
@@ -189,6 +206,9 @@ namespace TheSpaceBetween
 
         private Vector3 approachVelocity;
         private float carriedX;
+        private float airVelocityX;              // Sideways speed in the air, kept between frames so air control steers momentum.
+        private bool ranOnThisWall;              // The player has run on the current surface, so letting go of run or the keys lets go of it.
+        private float letGoSign;                 // After letting go of a wall: the way away from it, until the push is spent. 0 otherwise.
         private float airbornePeakY;
 
         private float animationMotionX;          // Speed along X handed over by an animation's own motion, such as the landing roll.
@@ -440,9 +460,9 @@ namespace TheSpaceBetween
                 OnMovedBySwap(input);
             }
 
-            // A slide, or a roll carried by its animation, keeps its direction until it ends, so the character does not
-            // spin around halfway through.
-            if (!isSliding && !IsMovedByAnimation && Mathf.Abs(input) > FacingInputThreshold)
+            // A slide, a wall jump, or a roll carried by its animation, keeps its direction until it ends, so the character
+            // does not spin around halfway through, and a landing roll after a wall jump tumbles on the way of the launch.
+            if (!isSliding && !inWallJump && !IsMovedByAnimation && Mathf.Abs(input) > FacingInputThreshold)
             {
                 facingSign = Mathf.Sign(input);
             }
@@ -555,15 +575,47 @@ namespace TheSpaceBetween
             {
                 horizontal = slideDirection * slideSpeed;
             }
+            else if (!isGrounded)
+            {
+                // Air control: a held key steers the momentum the player already has instead of replacing it. With no key
+                // held the momentum fades the way speed left over from a wall run always has, so it is kept, not stopped.
+                // Just after letting go of a wall, a key still held toward it waits until the push away is spent, so the
+                // player always drops clear of the wall instead of sliding down against it.
+                float steer = input * letGoSign < 0f ? 0f : input;
+                if (Mathf.Abs(steer) > FacingInputThreshold)
+                {
+                    float target = steer * (isRunning ? runSpeed : moveSpeed);
+                    airVelocityX = Mathf.MoveTowards(airVelocityX, target, AirAcceleration() * Time.deltaTime);
+                }
+                else
+                {
+                    airVelocityX *= Mathf.Exp(-CarriedMomentumDecay * Time.deltaTime);
+                }
+
+                // The ground's leftover speed fades exactly as before, so a frame back on the ground carries on unchanged.
+                carriedX *= Mathf.Exp(-CarriedMomentumDecay * Time.deltaTime);
+                horizontal = airVelocityX;
+                if (airVelocityX * letGoSign <= LetGoSpentSpeed)
+                {
+                    letGoSign = 0f;
+                }
+            }
             else
             {
-                // Speed left over from a wall run fades out so the change to normal control is smooth.
+                // Speed left over from a wall run or a slide fades out so the change to normal control is smooth.
                 carriedX *= Mathf.Exp(-CarriedMomentumDecay * Time.deltaTime);
                 horizontal = input * (isRunning ? runSpeed : moveSpeed) + carriedX;
-                if (isGrounded && IsMovedByAnimation)
+                if (IsMovedByAnimation)
                 {
                     horizontal = WithAnimationMotion(horizontal);
                 }
+            }
+
+            // Whatever moves the player on the ground, in a slide or in a wall jump is the momentum the air starts from.
+            if (isGrounded || inWallJump || isSliding)
+            {
+                airVelocityX = horizontal;
+                letGoSign = 0f;
             }
 
             // The movement actually made last frame. The frame that touches a surface is blocked by it,
@@ -586,6 +638,12 @@ namespace TheSpaceBetween
         {
             float along = Mathf.Max(animationMotionX * facingSign, 0f);
             return facingSign * Mathf.Max(horizontal * facingSign, along);
+        }
+
+        // How quickly the keys change the sideways speed in the air, in units per second squared.
+        private float AirAcceleration()
+        {
+            return Mathf.Max(runSpeed, moveSpeed) / airControlSeconds;
         }
 
         //==================== FALL HEIGHT =====================
@@ -852,6 +910,8 @@ namespace TheSpaceBetween
             surfaceSpeed = speedAlongSurface;
             verticalSpeed = 0f;
             carriedX = 0f;
+            ranOnThisWall = isRunning;
+            letGoSign = 0f;
         }
 
         //==================== WALL RUN: ON THE SURFACE =====================
@@ -873,7 +933,14 @@ namespace TheSpaceBetween
             bool slidOff = surfaceSpeed <= 0f && StandingOnWalkableGround();
             if (!onSurface || slidOff)
             {
+                // Running off the top: still moving up the surface when it ran out.
+                bool ranOffTop = !onSurface && surfaceSpeed > 0f && AlongSurface().y > 0f;
                 EndWallRun(input);
+                if (ranOffTop)
+                {
+                    LiftOffTheTop();
+                }
+
                 return;
             }
 
@@ -884,8 +951,17 @@ namespace TheSpaceBetween
                 return;
             }
 
+            // Letting go of run or of the movement keys lets go of the surface. Only once the player has run on it, so a
+            // surface reached without running, such as a steep slope landed on, is still slid down and can be run up.
+            ranOnThisWall |= isRunning;
+            if (ranOnThisWall && !isRunning)
+            {
+                LetGo(input);
+                return;
+            }
+
             // Run plus either movement key keeps running along the surface, so a key still held from the last wall
-            // keeps the run going. Letting go of run, or of both movement keys, slides slowly down.
+            // keeps the run going. A surface not run on yet is slid slowly down.
             float targetSpeed = isRunning ? runSpeed : -wallSlideSpeed;
             surfaceSpeed = Mathf.MoveTowards(surfaceSpeed, targetSpeed, SurfaceAcceleration * Time.deltaTime);
 
@@ -954,12 +1030,38 @@ namespace TheSpaceBetween
             Vector3 velocity = AlongSurface() * surfaceSpeed;
             verticalSpeed = velocity.y;
             carriedX = velocity.x - input * (isRunning ? runSpeed : moveSpeed);
+            airVelocityX = velocity.x;
 
             isWallRunning = false;
             surfaceSpeed = 0f;
             lastWallNormal = wallNormal;
             cooldownUntil = Time.time + SameWallCooldownSeconds;
             RestartFallMeasurement();
+        }
+
+        // Letting go: a small push straight away from the surface, so the player drops clear of it and falls. The push fades
+        // like any momentum in the air and comes to rest Let Go Push Distance away; a key still held toward the surface waits
+        // until then. Whatever speed the run had is kept, so letting go while running up still rises a little before the fall.
+        private void LetGo(float input)
+        {
+            float push = letGoPushDistance * CarriedMomentumDecay * wallNormal.x;
+            EndWallRun(input);
+            airVelocityX += push;
+            carriedX += push;
+            letGoSign = Mathf.Sign(wallNormal.x);
+        }
+
+        // Running off the top of a surface keeps its upward speed and adds Wall Top Lift of height, so the player clears the
+        // ledge instead of only just reaching it. Worked out from gravity, so the extra height is the same at any run speed,
+        // and nothing is moved directly.
+        private void LiftOffTheTop()
+        {
+            if (verticalSpeed <= 0f)
+            {
+                return;
+            }
+
+            verticalSpeed = Mathf.Sqrt(verticalSpeed * verticalSpeed + 2f * gravity * wallTopLift);
         }
 
         //==================== WALL JUMP =====================
@@ -974,6 +1076,9 @@ namespace TheSpaceBetween
             carriedX = 0f;
             inWallJump = true;
             wallJumpVelocityX = awaySign * wallJumpAwaySpeed;
+
+            // The player now faces the launch, so whatever follows it, such as the landing roll, continues that way.
+            facingSign = awaySign;
             wallJumpTime = Time.time;
 
             ScanForOppositeWall(awaySign);
@@ -1056,6 +1161,7 @@ namespace TheSpaceBetween
 
             inWallJump = false;
             carriedX = wallJumpVelocityX;
+            airVelocityX = wallJumpVelocityX;
             ReportWallJump("ended by a swap");
         }
 
@@ -1082,6 +1188,8 @@ namespace TheSpaceBetween
         {
             verticalSpeed = 0f;
             carriedX = 0f;
+            airVelocityX = 0f;
+            letGoSign = 0f;
             animationMotionFrame = -1;
             pushedIntoSideFrame = -1;
             surfaceSpeed = 0f;

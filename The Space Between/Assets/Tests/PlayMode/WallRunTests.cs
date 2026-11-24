@@ -294,7 +294,7 @@ namespace TheSpaceBetween.Tests
         }
 
         [UnityTest]
-        public IEnumerator ReleasingInput_SlidesSlowlyDownAndLandsOnTheFloor()
+        public IEnumerator ReleasingTheDirection_LetsGoOfTheWall_AndFallsToTheFloor()
         {
             BuildVerticalWall();
             BuildPlayer();
@@ -308,48 +308,25 @@ namespace TheSpaceBetween.Tests
                 yield return null;
             }
 
-            Release(keyboard.leftShiftKey);
-            yield return null;
+            // Run is still held, but without a movement key the player lets go.
             Release(keyboard.dKey);
+            yield return null;
+            yield return null;
+            Assert.IsFalse(controller.IsWallRunning, "Releasing the movement key should let go of the wall.");
 
-            // Give the run speed time to turn into the slow slide, then measure how fast the player sinks.
-            float settle = Time.time + 0.5f;
-            while (Time.time < settle)
+            float land = Time.time + 3f;
+            while (!controller.IsGrounded && Time.time < land)
             {
                 yield return null;
             }
 
-            Assert.IsTrue(controller.IsWallRunning, "Letting go should keep the player on the wall.");
-            float fromY = playerObject.transform.position.y;
-            float fromTime = Time.time;
-            float measure = Time.time + 0.5f;
-            while (Time.time < measure)
-            {
-                yield return null;
-            }
-
-            float sinkSpeed = (fromY - playerObject.transform.position.y) / (Time.time - fromTime);
-            Assert.Less(sinkSpeed, WallSlideSpeed + 0.3f, "The player should slide slowly, not fall.");
-            Assert.Greater(sinkSpeed, 0.5f, "With slide speed above 0 the player should sink.");
-
-            float end = Time.time + 6f;
-            while (controller.IsWallRunning && Time.time < end)
-            {
-                yield return null;
-            }
-
-            float land = Time.time + 0.5f;
-            while (Time.time < land)
-            {
-                yield return null;
-            }
-
-            Assert.IsFalse(controller.IsWallRunning, "The slide should end at the floor.");
-            Assert.AreEqual(FloorCenterY, playerObject.transform.position.y, 0.2f);
+            Release(keyboard.leftShiftKey);
+            Assert.IsFalse(controller.IsWallRunning);
+            Assert.AreEqual(FloorCenterY, playerObject.transform.position.y, 0.2f, "The fall should end on the floor.");
         }
 
         [UnityTest]
-        public IEnumerator LettingGoOfRunOnAWall_SlidesInsteadOfRunning()
+        public IEnumerator LettingGoOfRunOnAWall_PushesClearOfIt_AndDoesNotGrabItAgain()
         {
             BuildVerticalWall();
             BuildPlayer();
@@ -364,15 +341,22 @@ namespace TheSpaceBetween.Tests
             }
 
             // Keep holding toward the wall but let go of run.
+            float wallSideX = playerObject.transform.position.x;
             Release(keyboard.leftShiftKey);
+            yield return null;
+            Assert.IsFalse(controller.IsWallRunning, "Letting go of run should let go of the wall.");
+
+            float furthest = 0f;
             float settle = Time.time + 0.5f;
             while (Time.time < settle)
             {
                 yield return null;
+                furthest = Mathf.Max(furthest, wallSideX - playerObject.transform.position.x);
+                Assert.IsFalse(controller.IsWallRunning, "Without run held the wall should not be grabbed again.");
             }
 
-            Assert.IsTrue(controller.IsWallRunning, "The player stays on the wall.");
-            Assert.Less(controller.SurfaceSpeed, 0f, "Without run held the player should slide down, not keep running up.");
+            Assert.Greater(furthest, 0.35f, "The player should be pushed clear of the wall, even with the key held toward it.");
+            Assert.Less(furthest, 0.7f, "The push should be small.");
         }
 
         [UnityTest]
@@ -411,6 +395,39 @@ namespace TheSpaceBetween.Tests
             Assert.IsFalse(reattached, "There is no wall to reach, so the player must not attach to anything.");
             Assert.Less(playerObject.transform.position.x, wallJumpX - 1f, "The jump should carry the player away from the wall.");
             Assert.AreEqual(FloorCenterY, playerObject.transform.position.y, 0.2f, "With nothing to reach the player falls to the floor.");
+        }
+
+        // The landing roll tumbles the way the player faces. Holding the key toward the old wall used to keep the player
+        // facing that wall, so after a wall jump the roll went back the opposite way of the jump.
+        [UnityTest]
+        public IEnumerator WallJump_FacesTheLaunch_UntilLanding_EvenWithTheKeyHeldTowardTheWall()
+        {
+            BuildVerticalWall();
+            BuildPlayer();
+            yield return null;
+
+            yield return HoldKeys(run: true);
+            yield return WaitForWallRun();
+            float climb = Time.time + 0.3f;
+            while (Time.time < climb)
+            {
+                yield return null;
+            }
+
+            yield return TapJump();
+            Assert.IsTrue(controller.IsInWallJump);
+
+            bool turnedBack = false;
+            float end = Time.time + 3f;
+            while (controller.IsInWallJump && Time.time < end)
+            {
+                turnedBack |= controller.Facing.x > 0f;
+                yield return null;
+            }
+
+            Assert.IsFalse(turnedBack, "During the jump the player faces the launch, away from the wall, whichever key is held.");
+            Assert.IsTrue(controller.IsGrounded, "The player should have landed.");
+            Assert.Less(controller.Facing.x, 0f, "On landing the player still faces the launch, so a landing roll continues that way.");
         }
 
         [UnityTest]
