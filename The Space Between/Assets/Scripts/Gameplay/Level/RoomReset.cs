@@ -52,6 +52,9 @@ namespace TheSpaceBetween
 
         public bool PlayerInside => playerInside;
 
+        /// <summary>The reset action, read only, so on-screen guidance can show its real bindings.</summary>
+        public InputAction ResetAction => resetAction;
+
         /// <summary>The room's area in world space.</summary>
         public Bounds Area => (area != null ? area : GetComponent<BoxCollider>()).bounds;
 

@@ -241,6 +241,33 @@ namespace TheSpaceBetween.EditorTools
             }
         }
 
+        /// <summary>
+        /// Which room the selected room follows and which rooms follow it, with Link Rooms in Scene for rooms placed before
+        /// connections were recorded. Shown in Room Setup, in the window and the Inspector.
+        /// </summary>
+        public static void DrawConnections(GeneratedRoom room)
+        {
+            var names = new List<string>();
+            foreach (GeneratedRoom follower in RoomBuilder.FollowersOf(room))
+            {
+                names.Add("'" + follower.name + "'");
+            }
+
+            string before = room.Follows != null ? $"Follows '{room.Follows.name}'." : "Follows no room.";
+            string after = names.Count > 0 ? $" Followed by {string.Join(", ", names)}, which move with its exit." : " No room follows it.";
+            EditorGUILayout.LabelField("Connection: " + before + after, EditorStyles.wordWrappedMiniLabel);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button(new GUIContent("Link Rooms in Scene", "Connect every room whose entrance sits at another room's exit, so it moves with that room when its size changes. Nothing moves now. Rooms generated after another are connected already."), EditorStyles.miniButton))
+                {
+                    int linked = RoomBuilder.LinkRoomsByPosition(room.gameObject.scene);
+                    Debug.Log($"[Procedural Room Generator] Linked {linked} room(s) to the room before them.");
+                    SceneView.RepaintAll();
+                }
+            }
+        }
+
         /// <summary>The counts, the route check and what would interrupt a running player. Shown in Diagnostics.</summary>
         public static void DrawDiagnostics(RoomPlan plan, RoomSettings values, string routeProblem)
         {

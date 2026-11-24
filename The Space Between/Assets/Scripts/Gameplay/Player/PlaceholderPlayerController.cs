@@ -267,6 +267,15 @@ namespace TheSpaceBetween
 
         public bool IsRunning => isRunning;
 
+        /// <summary>The input actions, read only, so on-screen guidance can show their real bindings.</summary>
+        public InputAction MoveAction => moveAction;
+
+        public InputAction JumpAction => jumpAction;
+
+        public InputAction RunAction => runAction;
+
+        public InputAction SlideAction => slideAction;
+
         public bool IsWallRunning => isWallRunning;
 
         /// <summary>True from the start of a slide until the player is standing again.</summary>

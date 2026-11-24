@@ -289,7 +289,7 @@ namespace TheSpaceBetween.Tests
             Assert.IsFalse(plan.CanBuild);
             StringAssert.Contains("Width needs to be at least", plan.Errors[0]);
             Assert.IsNull(RoomBuilder.CreateRoom(settings, Vector3.zero));
-            UnityEngine.TestTools.LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("RoomGenerator"));
+            UnityEngine.TestTools.LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex("Procedural Room Generator"));
         }
 
         [Test]

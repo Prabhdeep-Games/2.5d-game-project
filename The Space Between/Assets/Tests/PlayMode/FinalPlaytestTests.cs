@@ -533,7 +533,7 @@ namespace TheSpaceBetween.Tests
         public IEnumerator Tutorial_ControlsShowTheRealBindings_ForKeyboardAndGamepad()
         {
             yield return LoadScene();
-            Assert.IsTrue(guide.ControlsVisible, "The controls show at the start.");
+            Assert.AreEqual(2, guide.SignCount, "A controls sign at the start and a swap sign before the glass.");
             string kb(string token) => guide.KeyLabel(token, TutorialGuide.InputDevice.KeyboardMouse);
             string pad(string token) => guide.KeyLabel(token, TutorialGuide.InputDevice.Gamepad);
 
@@ -565,10 +565,37 @@ namespace TheSpaceBetween.Tests
             Assert.AreEqual("X / Square", pad("Use"));
             Assert.AreEqual("View / Select", pad("Restart"));
 
-            string table = guide.ControlsText;
-            StringAssert.Contains("W | A / Cross | Jump", table);
-            StringAssert.Contains("S | not set | Slide while running", table);
-            Assert.Pass(table);
+            // The signs in the level show the keys of the keyboard and mouse until a gamepad is used.
+            string start = guide.SignText(0);
+            string swapSign = guide.SignText(1);
+            StringAssert.Contains("A / D  move", start);
+            StringAssert.Contains("Left Shift  run", start);
+            StringAssert.Contains("W  jump", start);
+            StringAssert.Contains("E  use a panel", start);
+            StringAssert.Contains("R  restart the room", start);
+            StringAssert.Contains("Mouse  aim", swapSign);
+            StringAssert.Contains(kb("Swap") + "  swap places", swapSign);
+
+            // Using a gamepad turns the signs to its buttons.
+            Gamepad gamepad = InputSystem.AddDevice<Gamepad>();
+            Press(gamepad.buttonNorth);
+            yield return null;
+            Release(gamepad.buttonNorth);
+            yield return null;
+            yield return null;
+            Assert.AreEqual(TutorialGuide.InputDevice.Gamepad, guide.ActiveDevice);
+            StringAssert.Contains("Left stick  move", guide.SignText(0));
+            StringAssert.Contains("A / Cross  jump", guide.SignText(0));
+            Press(keyboard.dKey);
+            yield return null;
+            Release(keyboard.dKey);
+            yield return null;
+            yield return null;
+            Assert.AreEqual(TutorialGuide.InputDevice.KeyboardMouse, guide.ActiveDevice, "Back to the keyboard.");
+            StringAssert.Contains("W  jump", guide.SignText(0));
+            Assert.Pass(start.Replace("
+", " / ") + " | " + swapSign.Replace("
+", " / "));
         }
 
         [UnityTest]
@@ -587,11 +614,10 @@ namespace TheSpaceBetween.Tests
             yield return WaitSeconds(0.4f);
             StringAssert.Contains("W jumps over it", guide.CurrentHintText);
             yield return ReleaseAll();
-            Assert.IsTrue(guide.ControlsVisible, "The controls stay through the first room.");
 
             yield return GoToSection(1);
             yield return WaitSeconds(0.5f);
-            Assert.IsFalse(guide.ControlsVisible, "Past the first room the controls leave.");
+            Assert.IsNull(guide.CurrentHint, "Past the first room the opening line does not come back.");
             Assert.Pass(HintsSeen);
         }
 
@@ -626,7 +652,8 @@ namespace TheSpaceBetween.Tests
             yield return WaitSeconds(0.6f);
             var report = new StringBuilder($"screen {Screen.width}x{Screen.height}; ");
             Vector3 playerOnScreen = view.WorldToScreenPoint(player.transform.position);
-            foreach (string panelName in new[] { "Hint", "Controls" })
+            Assert.IsNull(guide.transform.Find("Tutorial UI/Controls"), "No controls box: the controls are signs in the level.");
+            foreach (string panelName in new[] { "Hint" })
             {
                 var panel = (RectTransform)guide.transform.Find("Tutorial UI/" + panelName);
                 Assert.NotNull(panel, panelName);

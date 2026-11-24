@@ -510,6 +510,7 @@ namespace TheSpaceBetween.Tests
             GameObject element = AddCatalogElement(room, RoomElementCatalog.Entries[0], 10f);
             Component elementPart = element.GetComponentInChildren<MonoBehaviour>();
             Component outside = new GameObject("Outside").AddComponent<ArchitecturalBlock>();
+            Selection.activeGameObject = room.gameObject;
             Assert.IsTrue(GeneratedRoom.ShowsGizmos(block));
             Assert.IsTrue(GeneratedRoom.ShowsGizmos(elementPart));
 
@@ -803,6 +804,236 @@ namespace TheSpaceBetween.Tests
                 {
                     window.Close();
                 }
+            }
+        }
+            //==================== GIZMOS FOLLOW THE SELECTION =====================
+        [Test]
+        public void GizmosInARoom_ShowOnlyWhileThatRoomOrSomethingInItIsSelected()
+        {
+            GeneratedRoom room = RoomBuilder.CreateRoom(Settings(RoomPurpose.ObservationChamber), Vector3.zero);
+            GeneratedRoom other = RoomBuilder.CreateRoom(Settings(RoomPurpose.RestrictedCorridor), room.ExitPoint);
+            ArchitecturalBlock block = room.GetComponentInChildren<ArchitecturalBlock>();
+            GameObject element = AddCatalogElement(room, RoomElementCatalog.Entries[0], 10f);
+            Component outside = new GameObject("Outside").AddComponent<ArchitecturalBlock>();
+
+            Selection.activeGameObject = null;
+            Assert.IsFalse(GeneratedRoom.ShowsGizmos(block), "Nothing selected: the room's gizmos are hidden.");
+            Assert.IsTrue(GeneratedRoom.ShowsGizmos(outside), "Objects outside rooms keep their gizmos.");
+
+            Selection.activeGameObject = element;
+            Assert.IsTrue(GeneratedRoom.ShowsGizmos(block), "Selecting something in the room shows them.");
+
+            Selection.activeGameObject = other.gameObject;
+            Assert.IsFalse(GeneratedRoom.ShowsGizmos(block), "Selecting another room hides them.");
+            Assert.IsTrue(GeneratedRoom.ShowsGizmos(other.GetComponentInChildren<ArchitecturalBlock>()));
+
+            Selection.activeGameObject = outside.gameObject;
+            Assert.IsFalse(GeneratedRoom.ShowsGizmos(block), "Selecting an unrelated object hides them.");
+            Assert.IsTrue(GeneratedRoom.ShowsGizmos(outside));
+        }
+
+        //==================== CONNECTED ROOMS FOLLOW A RESIZE =====================
+        private static string Snapshot(GeneratedRoom room)
+        {
+            var text = new System.Text.StringBuilder(JsonUtility.ToJson(room.Settings));
+            text.Append(room.transform.rotation.eulerAngles.ToString("F3"));
+            foreach (Transform child in room.GetComponentsInChildren<Transform>(true))
+            {
+                if (child != room.transform)
+                {
+                    text.Append(child.name).Append(room.transform.InverseTransformPoint(child.position).ToString("F3"));
+                }
+            }
+
+            return text.ToString();
+        }
+
+        private static void SetWidth(GeneratedRoom room, float width)
+        {
+            ChangeOnComponent(room, "width", p => p.floatValue = width);
+            Assert.AreEqual(width, room.Settings.Width, 0.001f);
+        }
+
+        [Test]
+        public void WideningARoom_MovesOnlyTheRoomsConnectedAfterIt_ByTheChange_WithoutChangingThem()
+        {
+            RoomSettings corridor = Settings(RoomPurpose.RestrictedCorridor, 101);
+            Set(corridor, "width", 40f);
+            GeneratedRoom before = RoomBuilder.CreateRoom(Settings(RoomPurpose.ContainmentCell), new Vector3(-30f, 0f, 0f));
+            GeneratedRoom resized = RoomBuilder.CreateRoom(corridor, before.ExitPoint);
+            GeneratedRoom second = RoomBuilder.CreateRoom(Settings(RoomPurpose.ObservationChamber), resized.ExitPoint);
+            GeneratedRoom third = RoomBuilder.CreateRoom(Settings(RoomPurpose.VerticalConnection), second.ExitPoint);
+            GeneratedRoom apart = RoomBuilder.CreateRoom(Settings(RoomPurpose.MonumentalHall), new Vector3(0f, 0f, 60f));
+            var handPlaced = new GameObject("Placed By Hand");
+            handPlaced.transform.SetParent(second.transform, false);
+            handPlaced.transform.localPosition = new Vector3(3f, 1f, 0f);
+            AddCatalogElement(second, RoomElementCatalog.Entries[0], 10f);
+
+            Assert.AreEqual(resized, second.Follows, "A room generated at another's exit follows it.");
+            Assert.AreEqual(second, third.Follows);
+            Assert.IsNull(apart.Follows);
+            Vector3 beforeAt = before.transform.position;
+            Vector3 resizedAt = resized.transform.position;
+            Vector3 secondAt = second.transform.position;
+            Vector3 thirdAt = third.transform.position;
+            Vector3 apartAt = apart.transform.position;
+            string secondLook = Snapshot(second);
+            string thirdLook = Snapshot(third);
+            GameObject secondPiece = second.GeneratedObjects[0];
+
+            SetWidth(resized, 60f);
+
+            Assert.AreEqual(beforeAt, before.transform.position, "The room before stays.");
+            Assert.AreEqual(resizedAt, resized.transform.position, "The resized room is the anchor.");
+            Assert.That(Vector3.Distance(secondAt + new Vector3(20f, 0f, 0f), second.transform.position), Is.LessThan(PositionTolerance), $"Moved by the 20 added. At {second.transform.position}");
+            Assert.That(Vector3.Distance(thirdAt + new Vector3(20f, 0f, 0f), third.transform.position), Is.LessThan(PositionTolerance), "The rooms after it move too.");
+            Assert.AreEqual(apartAt, apart.transform.position, "A room that is not connected stays.");
+            Assert.That(Vector3.Distance(resized.ExitPoint, second.transform.position), Is.LessThan(PositionTolerance), "Still joined.");
+            Assert.AreEqual(secondLook, Snapshot(second), "Its values, turn, pieces, elements and hand-placed objects are unchanged.");
+            Assert.AreEqual(thirdLook, Snapshot(third));
+            Assert.AreEqual(secondPiece, second.GeneratedObjects[0], "The moved room is not rebuilt.");
+        }
+
+        [Test]
+        public void NarrowingAndResizingAgain_PlacesTheRoomsFromTheCurrentExit_WithNoDrift()
+        {
+            RoomSettings corridor = Settings(RoomPurpose.RestrictedCorridor, 101);
+            Set(corridor, "width", 40f);
+            GeneratedRoom resized = RoomBuilder.CreateRoom(corridor, Vector3.zero);
+            GeneratedRoom second = RoomBuilder.CreateRoom(Settings(RoomPurpose.ChaseRun), resized.ExitPoint);
+            GeneratedRoom third = RoomBuilder.CreateRoom(Settings(RoomPurpose.ContainmentCell), second.ExitPoint);
+            Vector3 secondAt = second.transform.position;
+            Vector3 thirdAt = third.transform.position;
+
+            SetWidth(resized, 30f);
+            Assert.That(Vector3.Distance(secondAt - new Vector3(10f, 0f, 0f), second.transform.position), Is.LessThan(PositionTolerance), "Narrowing pulls the rooms back.");
+
+            foreach (float width in new[] { 60f, 52.5f, 33f, 70f, 41f, 40f })
+            {
+                SetWidth(resized, width);
+                Assert.That(Vector3.Distance(resized.ExitPoint, second.transform.position), Is.LessThan(PositionTolerance), $"Joined at width {width}.");
+                Assert.That(Vector3.Distance(second.ExitPoint, third.transform.position), Is.LessThan(PositionTolerance));
+            }
+
+            Assert.That(Vector3.Distance(secondAt, second.transform.position), Is.LessThan(0.0001f), "Back at the same width, exactly where it was.");
+            Assert.That(Vector3.Distance(thirdAt, third.transform.position), Is.LessThan(0.0001f));
+        }
+
+        [Test]
+        public void ARiseChange_InAnotherRoomType_MovesTheRoomsAfterItUpOrDown()
+        {
+            GeneratedRoom climb = RoomBuilder.CreateRoom(Settings(RoomPurpose.VerticalConnection), Vector3.zero);
+            GeneratedRoom after = RoomBuilder.CreateRoom(Settings(RoomPurpose.ObservationChamber), climb.ExitPoint);
+            Vector3 afterAt = after.transform.position;
+            ChangeOnComponent(climb, "exitRise", p => p.floatValue = climb.Settings.ExitRise - 4f);
+            Assert.That(Vector3.Distance(afterAt + new Vector3(0f, -4f, 0f), after.transform.position), Is.LessThan(PositionTolerance), $"At {after.transform.position}");
+        }
+
+        [Test]
+        public void Branches_BothFollowTheResizedRoom()
+        {
+            GeneratedRoom hub = RoomBuilder.CreateRoom(Settings(RoomPurpose.ObservationChamber), Vector3.zero);
+            GeneratedRoom left = RoomBuilder.CreateRoom(Settings(RoomPurpose.RestrictedCorridor), hub.ExitPoint);
+            GeneratedRoom right = RoomBuilder.CreateRoom(Settings(RoomPurpose.RestrictedCorridor, 7), hub.ExitPoint + new Vector3(0f, 0f, 30f));
+            right.transform.position = hub.ExitPoint;
+            Assert.AreEqual(1, RoomBuilder.LinkRoomsByPosition(right.gameObject.scene), "The second branch is linked by position.");
+            Assert.AreEqual(hub, right.Follows);
+
+            SetWidth(hub, hub.Settings.Width + 8f);
+            Assert.That(Vector3.Distance(hub.ExitPoint, left.transform.position), Is.LessThan(PositionTolerance));
+            Assert.That(Vector3.Distance(hub.ExitPoint, right.transform.position), Is.LessThan(PositionTolerance));
+        }
+
+        [Test]
+        public void ATurnedRoom_IsBuiltTurned_AndItsFollowersMoveAlongItsOwnDirection()
+        {
+            GeneratedRoom turned = RoomBuilder.CreateRoom(Settings(RoomPurpose.RestrictedCorridor), Vector3.zero);
+            turned.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
+            RoomBuilder.Regenerate(turned, turned.Settings);
+            Vector3 exitDirection = (turned.ExitPoint - turned.transform.position).normalized;
+            Assert.That(Vector3.Distance(new Vector3(0f, 0f, -1f), exitDirection), Is.LessThan(0.001f), $"The exit is along the room's own direction. {exitDirection}");
+
+            GeneratedRoom straight = RoomBuilder.CreateRoom(Settings(RoomPurpose.RestrictedCorridor), new Vector3(0f, 0f, 200f));
+            ArchitecturalBlock[] turnedBlocks = turned.GetComponentsInChildren<ArchitecturalBlock>();
+            ArchitecturalBlock[] straightBlocks = straight.GetComponentsInChildren<ArchitecturalBlock>();
+            Assert.AreEqual(straightBlocks.Length, turnedBlocks.Length);
+            for (int i = 0; i < turnedBlocks.Length; i++)
+            {
+                Vector3 a = turned.transform.InverseTransformPoint(turnedBlocks[i].transform.position);
+                Vector3 b = straight.transform.InverseTransformPoint(straightBlocks[i].transform.position);
+                Assert.That(Vector3.Distance(a, b), Is.LessThan(PositionTolerance), $"'{turnedBlocks[i].name}' is laid out along the turned room, as in an unturned one.");
+            }
+
+            GeneratedRoom follower = RoomBuilder.CreateRoom(Settings(RoomPurpose.ObservationChamber), turned.ExitPoint);
+            Assert.AreEqual(turned, follower.Follows);
+            Assert.That(Quaternion.Angle(turned.transform.rotation, follower.transform.rotation), Is.LessThan(0.01f), "A room after a turned room takes its turn.");
+            Vector3 followerAt = follower.transform.position;
+
+            SetWidth(turned, turned.Settings.Width + 12f);
+            Assert.That(Vector3.Distance(followerAt + exitDirection * 12f, follower.transform.position), Is.LessThan(PositionTolerance), $"At {follower.transform.position}");
+        }
+
+        [Test]
+        public void UndoAndRedo_RestoreTheSizeAndTheConnectedPositionsTogether()
+        {
+            RoomSettings corridor = Settings(RoomPurpose.RestrictedCorridor, 101);
+            Set(corridor, "width", 40f);
+            GeneratedRoom resized = RoomBuilder.CreateRoom(corridor, Vector3.zero);
+            GeneratedRoom second = RoomBuilder.CreateRoom(Settings(RoomPurpose.ObservationChamber), resized.ExitPoint);
+            Vector3 secondAt = second.transform.position;
+            Undo.IncrementCurrentGroup();
+
+            SetWidth(resized, 60f);
+            Undo.IncrementCurrentGroup();
+            Vector3 movedTo = second.transform.position;
+
+            Undo.PerformUndo();
+            RoomLiveUpdater.Flush();
+            Assert.AreEqual(40f, resized.Settings.Width, 0.001f, "One Undo restores the width.");
+            Assert.That(Vector3.Distance(secondAt, second.transform.position), Is.LessThan(PositionTolerance), "And the connected room's position.");
+
+            Undo.PerformRedo();
+            RoomLiveUpdater.Flush();
+            Assert.AreEqual(60f, resized.Settings.Width, 0.001f, "Redo brings the width back.");
+            Assert.That(Vector3.Distance(movedTo, second.transform.position), Is.LessThan(PositionTolerance), "And the move.");
+        }
+
+        [Test]
+        public void ARoomThatIsNotLinked_NeverMoves_EvenIfItSitsAtTheExit()
+        {
+            GeneratedRoom resized = RoomBuilder.CreateRoom(Settings(RoomPurpose.RestrictedCorridor), Vector3.zero);
+            GeneratedRoom loose = RoomBuilder.CreateRoom(Settings(RoomPurpose.ObservationChamber), new Vector3(0f, 0f, 50f));
+            loose.transform.position = resized.ExitPoint;
+            Vector3 looseAt = loose.transform.position;
+            SetWidth(resized, resized.Settings.Width + 10f);
+            Assert.AreEqual(looseAt, loose.transform.position, "Only linked rooms move; Link Rooms in Scene links it.");
+        }
+
+        [Test]
+        public void ARoomNamedByHand_KeepsItsName_WhenRebuilt_AndAGeneratedNameFollowsTheSeed()
+        {
+            GeneratedRoom named = RoomBuilder.CreateRoom(Settings(RoomPurpose.RestrictedCorridor, 5), Vector3.zero);
+            GeneratedRoom automatic = RoomBuilder.CreateRoom(Settings(RoomPurpose.RestrictedCorridor, 6), named.ExitPoint);
+            named.gameObject.name = "Room 1 Arrival";
+            ChangeOnComponent(named, "seed", p => p.intValue = 77);
+            ChangeOnComponent(automatic, "seed", p => p.intValue = 78);
+            Assert.AreEqual("Room 1 Arrival", named.gameObject.name);
+            Assert.AreEqual("Room_RestrictedCorridor_78", automatic.gameObject.name);
+        }
+
+        [Test]
+        public void Window_IsCalledProceduralRoomGenerator()
+        {
+            RoomGeneratorWindow.Open();
+            RoomGeneratorWindow window = EditorWindow.GetWindow<RoomGeneratorWindow>();
+            try
+            {
+                Assert.AreEqual("Procedural Room Generator", window.titleContent.text);
+                Assert.IsTrue(EditorApplication.ExecuteMenuItem("Tools/Procedural Room Generator"), "The menu item has the new name.");
+            }
+            finally
+            {
+                window.Close();
             }
         }
     }

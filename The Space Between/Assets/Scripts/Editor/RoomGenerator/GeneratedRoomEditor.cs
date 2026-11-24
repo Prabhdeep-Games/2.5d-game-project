@@ -56,7 +56,7 @@ namespace TheSpaceBetween.EditorTools
             EditorGUILayout.HelpBox(
                 Application.isPlaying
                     ? "Changes rebuild this room straight away. Anything changed during Play is lost when Play stops."
-                    : "Changes rebuild this room straight away, replacing generated pieces you changed by hand. To edit it freely, use Detach Room in the Room Generator window. Changing Width or Exit Rise moves the exit, and rooms after it do not follow.",
+                    : "Changes rebuild this room straight away, replacing generated pieces you changed by hand. To edit it freely, use Detach Room in the Procedural Room Generator window. Changing Width or Exit Rise moves the exit, and the rooms connected after it move with it.",
                 MessageType.None);
             RoomGeneratorSections.DrawProblems(plan, routeProblem, null, " The room stays as it was until this is fixed.");
 
@@ -64,6 +64,7 @@ namespace TheSpaceBetween.EditorTools
             if (RoomGeneratorSections.Section(SectionKey + "Setup", "Room Setup"))
             {
                 EditValues(room, () => RoomGeneratorSections.DrawSetup(settings));
+                RoomGeneratorSections.DrawConnections(room);
             }
 
             if (RoomGeneratorSections.Section(SectionKey + "Architecture", "Architecture"))

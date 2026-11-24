@@ -3,7 +3,8 @@
     "rootNamespace": "TheSpaceBetween",
     "references": [
         "Unity.InputSystem",
-        "Unity.Cinemachine"
+        "Unity.Cinemachine",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

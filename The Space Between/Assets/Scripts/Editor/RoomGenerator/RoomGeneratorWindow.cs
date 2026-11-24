@@ -21,8 +21,8 @@ namespace TheSpaceBetween.EditorTools
             AfterSelectedRoom
         }
 
-        private const string MenuPath = "Tools/Room Generator";
-        private const string WindowTitle = "Room Generator";
+        private const string MenuPath = "Tools/Procedural Room Generator";
+        private const string WindowTitle = "Procedural Room Generator";
         private const string InspectorWindowType = "UnityEditor.InspectorWindow,UnityEditor";
         private const string SectionKey = "Window.";
         private const float ButtonHeight = 28f;
@@ -49,6 +49,10 @@ namespace TheSpaceBetween.EditorTools
         private GeneratedRoom lastFlickerRoom;
         private Vector2 scroll;
 
+        // The new-room outline is only drawn while this window's tab is showing, so a docked window behind another tab leaves
+        // the Scene view clean.
+        private bool isVisible;
+
         /// <summary>Opens the window as a normal, dockable tab beside the Inspector.</summary>
         [MenuItem(MenuPath)]
         public static void Open()
@@ -63,11 +67,25 @@ namespace TheSpaceBetween.EditorTools
         //==================== LIFECYCLE =====================
         private void OnEnable()
         {
+            // A tab docked before the rename keeps its saved title, so the title is set every time the window loads.
+            titleContent = new GUIContent(WindowTitle);
             serializedWindow = new SerializedObject(this);
             Selection.selectionChanged += OnSelectionChanged;
             SceneView.duringSceneGui += DrawPreview;
             OnSelectionChanged();
             RefreshPlan();
+        }
+
+        private void OnBecameVisible()
+        {
+            isVisible = true;
+            SceneView.RepaintAll();
+        }
+
+        private void OnBecameInvisible()
+        {
+            isVisible = false;
+            SceneView.RepaintAll();
         }
 
         private void OnFocus()
@@ -142,6 +160,10 @@ namespace TheSpaceBetween.EditorTools
             {
                 DrawPlacement();
                 DrawValues(RoomGeneratorSections.DrawSetup);
+                if (selectedRoom != null)
+                {
+                    RoomGeneratorSections.DrawConnections(selectedRoom);
+                }
             }
 
             if (RoomGeneratorSections.Section(SectionKey + "Architecture", "Architecture"))
@@ -289,7 +311,7 @@ namespace TheSpaceBetween.EditorTools
             }
             else
             {
-                EditorGUILayout.LabelField($"Starts at the exit of '{selectedRoom.name}', {(selectedRoom.transform.position + selectedRoom.ExitOffset).ToString("0.##")}.", EditorStyles.wordWrappedMiniLabel);
+                EditorGUILayout.LabelField($"Starts at the exit of '{selectedRoom.name}', {selectedRoom.ExitPoint.ToString("0.##")}, and follows it: it moves when that room changes size.", EditorStyles.wordWrappedMiniLabel);
             }
         }
 
@@ -308,7 +330,7 @@ namespace TheSpaceBetween.EditorTools
         {
             if (placement == Placement.AfterSelectedRoom && selectedRoom != null)
             {
-                return selectedRoom.transform.position + selectedRoom.ExitOffset;
+                return selectedRoom.ExitPoint;
             }
 
             return newRoomPosition;
@@ -354,7 +376,7 @@ namespace TheSpaceBetween.EditorTools
             float furthest = float.MinValue;
             foreach (GeneratedRoom room in FindObjectsByType<GeneratedRoom>(FindObjectsSortMode.None))
             {
-                Vector3 exit = room.transform.position + room.ExitOffset;
+                Vector3 exit = room.ExitPoint;
                 if (exit.x > furthest)
                 {
                     furthest = exit.x;
@@ -386,7 +408,7 @@ namespace TheSpaceBetween.EditorTools
             DrawFlickerCheck();
 
             EditorGUI.BeginChangeCheck();
-            showPreview = EditorGUILayout.Toggle(new GUIContent("Scene View Preview", "Draw an outline of the new room in the Scene view while no room is selected."), showPreview);
+            showPreview = EditorGUILayout.Toggle(new GUIContent("Scene View Preview", "Draw an outline of the new room in the Scene view while no room is selected and this window's tab is showing."), showPreview);
             if (EditorGUI.EndChangeCheck())
             {
                 SceneView.RepaintAll();
@@ -500,7 +522,7 @@ namespace TheSpaceBetween.EditorTools
             GeneratedRoom room = selectedRoom;
             bool confirmed = EditorUtility.DisplayDialog(
                 "Detach Room",
-                $"Detach '{room.name}'?\n\nIts objects stay in the scene, but it can no longer be rebuilt, cleared or changed from the Room Generator. Edit > Undo reverses this.",
+                $"Detach '{room.name}'?\n\nIts objects stay in the scene, but it can no longer be rebuilt, cleared or changed from the Procedural Room Generator. Edit > Undo reverses this.",
                 "Detach",
                 "Cancel");
             if (!confirmed)
@@ -535,7 +557,7 @@ namespace TheSpaceBetween.EditorTools
         private void DrawPreview(SceneView view)
         {
             // A selected room shows its changes itself, so only a room yet to be generated needs an outline.
-            if (!showPreview || plan == null || !plan.CanBuild || selectedRoom != null)
+            if (!showPreview || !isVisible || plan == null || !plan.CanBuild || selectedRoom != null)
             {
                 return;
             }

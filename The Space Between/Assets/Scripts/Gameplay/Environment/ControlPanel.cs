@@ -157,6 +157,9 @@ namespace TheSpaceBetween
 
         public bool PlayerInReach => playerInReach;
 
+        /// <summary>The interact action, read only, so on-screen guidance can show its real bindings.</summary>
+        public InputAction InteractAction => interactAction;
+
         public bool IsOccupied => isOccupied;
 
         public PanelActivation Activation => activation;

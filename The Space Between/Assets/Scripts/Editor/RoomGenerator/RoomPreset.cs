@@ -26,7 +26,7 @@ namespace TheSpaceBetween.EditorTools
         [Tooltip("The elements of the room, relative to its entrance floor.")]
         [SerializeField] private List<Element> elements = new List<Element>();
 
-        [Tooltip("What this arrangement is for, shown in the Room Generator.")]
+        [Tooltip("What this arrangement is for, shown in the Procedural Room Generator.")]
         [SerializeField, TextArea] private string notes;
 
         public RoomSettings Settings => settings;

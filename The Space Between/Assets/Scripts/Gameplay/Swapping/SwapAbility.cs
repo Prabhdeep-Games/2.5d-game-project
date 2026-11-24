@@ -178,6 +178,13 @@ namespace TheSpaceBetween
 
         public SwapRejection LastResult => lastResult;
 
+        /// <summary>The input actions, read only, so on-screen guidance can show their real bindings.</summary>
+        public InputAction SwapAction => swapAction;
+
+        public InputAction AimStickAction => aimStickAction;
+
+        public InputAction PointerAction => pointerAction;
+
         public float Range => range;
 
         /// <summary>How an accepted swap plays out. Change it only while no swap is playing.</summary>

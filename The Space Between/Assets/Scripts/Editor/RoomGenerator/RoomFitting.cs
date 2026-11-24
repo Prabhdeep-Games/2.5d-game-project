@@ -39,7 +39,7 @@ namespace TheSpaceBetween.EditorTools
             List<string> changes = MakeRoomFor(values, before);
             if (changes.Count > 0)
             {
-                Debug.Log("Room Generator made room for the new option: " + string.Join(", ", changes) + ".");
+                Debug.Log("[Procedural Room Generator] Made room for the new option: " + string.Join(", ", changes) + ".");
             }
         }
 

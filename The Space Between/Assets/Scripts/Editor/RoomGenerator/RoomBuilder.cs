@@ -23,6 +23,13 @@ namespace TheSpaceBetween.EditorTools
         private const float CameraViewAngle = 26f;
         private const int IgnoreRaycastLayer = 2;
         private const float CameraZoneDepth = 4f;
+        private const string LogPrefix = "[Procedural Room Generator] ";
+
+        // How close a room's entrance must be to another room's exit to count as connected to it.
+        private const float ConnectionTolerance = 0.01f;
+
+        // The name a room gets from its values. A room renamed by hand keeps its own name when it is rebuilt.
+        private static readonly System.Text.RegularExpressions.Regex GeneratedName = new System.Text.RegularExpressions.Regex(@"^Room_[A-Za-z]+_-?\d+$");
 
         private static readonly Dictionary<RoomGroup, string> GroupNames = new Dictionary<RoomGroup, string>
         {
@@ -38,7 +45,10 @@ namespace TheSpaceBetween.EditorTools
         };
 
         //==================== GENERATE =====================
-        /// <summary>Makes a new room at a position. Returns null and logs why if the plan cannot be built.</summary>
+        /// <summary>
+        /// Makes a new room at a position. Returns null and logs why if the plan cannot be built. A room made at another room's
+        /// exit follows that room, with its turn, so it moves with it when that room changes size.
+        /// </summary>
         public static GeneratedRoom CreateRoom(RoomSettings settings, Vector3 position)
         {
             RoomPlan plan = RoomLayout.Create(settings);
@@ -47,11 +57,18 @@ namespace TheSpaceBetween.EditorTools
                 return null;
             }
 
+            GeneratedRoom leader = RoomEndingAt(position, null);
             var rootObject = new GameObject(RootName(settings));
             Undo.RegisterCreatedObjectUndo(rootObject, "Generate Room");
             rootObject.transform.position = position;
             GeneratedRoom room = rootObject.AddComponent<GeneratedRoom>();
             room.SetSettings(settings.Clone());
+            if (leader != null)
+            {
+                rootObject.transform.rotation = leader.transform.rotation;
+                room.SetFollows(leader);
+            }
+
             Rebuild(room, plan);
             return room;
         }
@@ -108,14 +125,147 @@ namespace TheSpaceBetween.EditorTools
 
         // Doors, panels and cameras read their position and connections when they wake, so the room stays inactive until they
         // are placed and connected. This is what makes a rebuild safe while the game is playing.
+        // The pieces are laid out along the world axes from the room's position, so a turned room is built unturned and then
+        // turned back, which turns its new pieces with it. Rooms that follow this one are then moved to its exit.
         private static void Rebuild(GeneratedRoom room, RoomPlan plan)
         {
             bool wasActive = room.gameObject.activeSelf;
             room.gameObject.SetActive(false);
+            Quaternion rotation = room.transform.rotation;
+            room.transform.rotation = Quaternion.identity;
             RemoveGenerated(room);
-            room.gameObject.name = RootName(room.Settings);
+            if (string.IsNullOrEmpty(room.gameObject.name) || GeneratedName.IsMatch(room.gameObject.name))
+            {
+                room.gameObject.name = RootName(room.Settings);
+            }
+
             Build(room, room.Settings, plan);
+            room.transform.rotation = rotation;
             room.gameObject.SetActive(wasActive);
+            PlaceFollowers(room);
+        }
+
+        //==================== CONNECTED ROOMS =====================
+        /// <summary>
+        /// Moves the rooms that follow this one, and the rooms after them, so each starts exactly at the exit of the room it
+        /// follows. Only their positions change: their values, turn, contents and elements stay as they are, and they are not
+        /// rebuilt. Each position is worked out from the current exits, so resizing a room again and again cannot drift. Rooms
+        /// that are not connected never move. The moves are not a separate Undo step: undoing the size change rebuilds the room,
+        /// which moves them back.
+        /// </summary>
+        public static void PlaceFollowers(GeneratedRoom room)
+        {
+            if (room == null)
+            {
+                return;
+            }
+
+            GeneratedRoom[] all = Object.FindObjectsByType<GeneratedRoom>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var placed = new HashSet<GeneratedRoom> { room };
+            var leaders = new Queue<GeneratedRoom>();
+            leaders.Enqueue(room);
+            while (leaders.Count > 0)
+            {
+                GeneratedRoom leader = leaders.Dequeue();
+                foreach (GeneratedRoom follower in all)
+                {
+                    if (follower == null || follower.Follows != leader || follower.gameObject.scene != leader.gameObject.scene || !placed.Add(follower))
+                    {
+                        continue;
+                    }
+
+                    Vector3 target = leader.ExitPoint;
+                    if ((follower.transform.position - target).sqrMagnitude > ConnectionTolerance * ConnectionTolerance * 0.01f)
+                    {
+                        follower.transform.position = target;
+                        EditorUtility.SetDirty(follower.transform);
+                        MarkDirty(follower);
+                    }
+
+                    leaders.Enqueue(follower);
+                }
+            }
+        }
+
+        /// <summary>The rooms that start at this room's exit and follow it.</summary>
+        public static List<GeneratedRoom> FollowersOf(GeneratedRoom room)
+        {
+            var followers = new List<GeneratedRoom>();
+            foreach (GeneratedRoom other in Object.FindObjectsByType<GeneratedRoom>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (other.Follows == room && room != null)
+                {
+                    followers.Add(other);
+                }
+            }
+
+            return followers;
+        }
+
+        /// <summary>
+        /// Connects every room in the scene that does not follow another yet to the room whose exit its entrance sits at, within
+        /// 1 cm. Nothing moves. One Undo step. Returns how many rooms were connected.
+        /// </summary>
+        public static int LinkRoomsByPosition(UnityEngine.SceneManagement.Scene scene)
+        {
+            Undo.SetCurrentGroupName("Link Rooms in Scene");
+            int group = Undo.GetCurrentGroup();
+            int linked = 0;
+            foreach (GeneratedRoom room in Object.FindObjectsByType<GeneratedRoom>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (room.gameObject.scene != scene || room.Follows != null)
+                {
+                    continue;
+                }
+
+                GeneratedRoom leader = RoomEndingAt(room.transform.position, room);
+                if (leader != null)
+                {
+                    Undo.RecordObject(room, "Link Rooms in Scene");
+                    room.SetFollows(leader);
+                    MarkDirty(room);
+                    linked++;
+                }
+            }
+
+            Undo.CollapseUndoOperations(group);
+            return linked;
+        }
+
+        // The room whose exit is at this point, other than the room itself and any room already after it (which would make a loop).
+        private static GeneratedRoom RoomEndingAt(Vector3 point, GeneratedRoom room)
+        {
+            foreach (GeneratedRoom other in Object.FindObjectsByType<GeneratedRoom>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (other == room || (other.ExitPoint - point).sqrMagnitude > ConnectionTolerance * ConnectionTolerance)
+                {
+                    continue;
+                }
+
+                if (room != null && (other.gameObject.scene != room.gameObject.scene || Follows(other, room)))
+                {
+                    continue;
+                }
+
+                return other;
+            }
+
+            return null;
+        }
+
+        // Whether a room is somewhere after another in a chain of connections.
+        private static bool Follows(GeneratedRoom room, GeneratedRoom earlier)
+        {
+            int guard = 0;
+            for (GeneratedRoom current = room.Follows; current != null && guard < 1000; current = current.Follows, guard++)
+            {
+                if (current == earlier)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static bool CanBuild(RoomPlan plan, bool logProblems)
@@ -124,7 +274,7 @@ namespace TheSpaceBetween.EditorTools
             {
                 if (logProblems)
                 {
-                    Debug.LogWarning("[RoomGenerator] " + string.Join(" ", plan.Errors));
+                    Debug.LogWarning(LogPrefix + string.Join(" ", plan.Errors));
                 }
 
                 return false;
@@ -135,7 +285,7 @@ namespace TheSpaceBetween.EditorTools
             {
                 if (logProblems)
                 {
-                    Debug.LogWarning("[RoomGenerator] Missing assets: " + string.Join(", ", missing));
+                    Debug.LogWarning(LogPrefix + "Missing assets: " + string.Join(", ", missing));
                 }
 
                 return false;
@@ -427,7 +577,7 @@ namespace TheSpaceBetween.EditorTools
 
             if (player == null && (panel != null || securityCamera != null))
             {
-                Debug.LogWarning("[RoomGenerator] No player in this scene, so the generated panel or camera has no Player assigned. Set it in the Inspector.");
+                Debug.LogWarning(LogPrefix + "No player in this scene, so the generated panel or camera has no Player assigned. Set it in the Inspector.");
             }
         }
 
@@ -679,7 +829,7 @@ namespace TheSpaceBetween.EditorTools
         {
             if (room == null || prefab == null || !PrefabUtility.IsPartOfPrefabAsset(prefab))
             {
-                Debug.LogWarning("[RoomGenerator] Elements must be prefab assets from the Project window.");
+                Debug.LogWarning(LogPrefix + "Elements must be prefab assets from the Project window.");
                 return null;
             }
 
@@ -766,7 +916,7 @@ namespace TheSpaceBetween.EditorTools
                 GameObject source = PrefabUtility.IsOutermostPrefabInstanceRoot(element) ? PrefabUtility.GetCorrespondingObjectFromSource(element) : null;
                 if (source == null)
                 {
-                    Debug.LogWarning($"[RoomGenerator] '{element.name}' is not a prefab instance, so it is not saved in the preset.", element);
+                    Debug.LogWarning(LogPrefix + $"'{element.name}' is not a prefab instance, so it is not saved in the preset.", element);
                     continue;
                 }
 

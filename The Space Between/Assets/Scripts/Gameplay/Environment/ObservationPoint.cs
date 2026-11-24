@@ -121,6 +121,9 @@ namespace TheSpaceBetween
 
         public bool IsObserving => isObserving;
 
+        /// <summary>The observe action, read only, so on-screen guidance can show its real bindings.</summary>
+        public InputAction ObserveAction => observeAction;
+
         /// <summary>The text to show while observing. Empty when the player cannot leave by hand.</summary>
         public string ExitPrompt => allowManualExit ? exitPrompt : string.Empty;
 
