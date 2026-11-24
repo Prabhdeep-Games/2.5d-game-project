@@ -61,7 +61,6 @@ namespace TheSpaceBetween
     public class RoomSettings
     {
         //==================== PURPOSE =====================
-        [Header("Purpose")]
         [Tooltip("What the room communicates. Changing this replaces the values below with a starting point for that purpose.")]
         [SerializeField] private RoomPurpose purpose = RoomPurpose.ObservationChamber;
 
@@ -69,7 +68,6 @@ namespace TheSpaceBetween
         [SerializeField] private int seed = 1;
 
         //==================== DIMENSIONS =====================
-        [Header("Dimensions")]
         [Tooltip("Length of the room along the route, in world units, including both end walls.")]
         [SerializeField, Range(8f, 96f)] private float width = 32f;
 
@@ -83,7 +81,6 @@ namespace TheSpaceBetween
         [SerializeField, Range(0.5f, 4f)] private float wallThickness = 1f;
 
         //==================== STRUCTURE =====================
-        [Header("Structure")]
         [Tooltip("Material of the walls.")]
         [SerializeField] private RoomFinish wallFinish = RoomFinish.Concrete;
 
@@ -102,14 +99,13 @@ namespace TheSpaceBetween
         [Tooltip("Adds a concrete beam under the ceiling at each bay line.")]
         [SerializeField] private bool ceilingBeams = true;
 
-        [Tooltip("How many bays get a recess in the back wall, closed by a steel plate. They read as openings that have been sealed.")]
+        [Tooltip("Sealed Recesses: how many bays get a deep recess in the back wall, closed by a steel plate at the back. They read as openings that have been sealed. Bays with the gallery window are skipped.")]
         [SerializeField, Range(0, 6)] private int recessedBays = 1;
 
-        [Tooltip("How many bays get a pale replacement panel on the back wall, so the building looks maintained over time.")]
+        [Tooltip("Repair Patches: how many bays get a flat patch of a near-matching concrete on the back wall, so the building looks maintained over time. They skip windows and sealed recesses, and stop below a wall fixture.")]
         [SerializeField, Range(0, 8)] private int repairPanels = 2;
 
         //==================== CIRCULATION =====================
-        [Header("Circulation")]
         [Tooltip("How the player comes in. A Panel Door is not available here, because its panel would have to stand outside the room. Sealed stays shut until you connect it to something.")]
         [SerializeField] private RoomThreshold entrance = RoomThreshold.Framed;
 
@@ -130,7 +126,6 @@ namespace TheSpaceBetween
         [SerializeField, Range(0f, 24f)] private float exitRise;
 
         //==================== CONTROL AND VISIBILITY =====================
-        [Header("Control and Visibility")]
         [Tooltip("Adds a Glass Partition across the route: the far side can be seen and swapped to, but not walked to. This blocks the route until you place a swap object.")]
         [SerializeField] private bool glassPartition;
 
@@ -164,7 +159,6 @@ namespace TheSpaceBetween
         [SerializeField] private bool cameraLocksExit;
 
         //==================== PLATFORMING =====================
-        [Header("Platforming")]
         [Tooltip("Adds the pieces of a chase route: gaps in the floor, crumbling bridges, low hoods to slide under, falling debris, a restart point and the runaway's path. The Chase Run purpose turns this on.")]
         [SerializeField] private bool platforming;
 
@@ -209,17 +203,16 @@ namespace TheSpaceBetween
         [SerializeField] private bool chasePath = true;
 
         //==================== LIGHTING =====================
-        [Header("Lighting")]
         [Tooltip("The kind of light in the room. Changing this replaces the lighting values below with a starting point for that mode.")]
         [SerializeField] private RoomLightingMode lightingMode = RoomLightingMode.HighContrastObservation;
 
         [Tooltip("Adds light panels recessed into the ceiling, at bay centres.")]
         [SerializeField] private bool ceilingFixtures = true;
 
-        [Tooltip("Adds fixtures on the back wall, at bay centres. Bays with a window or a recess are skipped.")]
+        [Tooltip("Adds fixtures on the back wall, at the centre of bays with a plain wall. Bays with a gallery window or a sealed recess have no wall to hang one on.")]
         [SerializeField] private bool wallFixtures;
 
-        [Tooltip("A fixture every this many bays. Higher leaves pools of light with darkness between them.")]
+        [Tooltip("A fixture every this many bays: ceiling fixtures count every bay, wall fixtures count the bays with a plain wall. Higher leaves pools of light with darkness between them.")]
         [SerializeField, Range(1, 4)] private int fixtureEveryBays = 2;
 
         [Tooltip("How bright the floor is under a fixture. The same value looks the same in any room height, because the light's strength is worked out from its distance.")]
@@ -239,7 +232,7 @@ namespace TheSpaceBetween
         [ShowIf(nameof(ceilingFixtures))]
         [SerializeField, Range(0, 3)] private int shadowCasters = 2;
 
-        [Tooltip("Share of the fixtures that have failed: they are dark and give no light. Which ones comes from the seed.")]
+        [Tooltip("Share of the fixtures that have failed: their panel is dark and they give no light. Which ones comes from the seed, and at least one always works. The Lighting section shows how many are lit.")]
         [SerializeField, Range(0f, 0.75f)] private float failedFixtures;
 
         [Tooltip("How much fixtures differ in brightness, as a share of Brightness. The differences come from the seed.")]
@@ -253,7 +246,6 @@ namespace TheSpaceBetween
         [SerializeField] private bool reflectionProbe;
 
         // Fog and ambient light belong to the whole scene, the values in Window > Rendering > Lighting > Environment.
-        [Space]
         [Tooltip("Sets the scene's fog (Lighting window > Environment > Fog) from the values below. Turning it off, or clearing the room, puts the scene's earlier fog back. The Art Direction Bible warns against using fog as a substitute for composition.")]
         [FormerlySerializedAs("fog")]
         [SerializeField] private bool sceneFog;

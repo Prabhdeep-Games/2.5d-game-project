@@ -79,13 +79,13 @@ namespace TheSpaceBetween.EditorTools
             new Entry { Category = Category.InteractiveArchitecture, Name = "Movable Platform", Path = Environment + "Movable Platform.prefab", Placement = Placement.Floor,
                 Description = "Moves to End Offset while powered. Add it to the Targets of a Control Panel or Pressure Pad." },
             new Entry { Category = Category.InteractiveArchitecture, Name = "Pressure Pad", Path = Environment + "Pressure Pad.prefab", Placement = Placement.Floor,
-                Description = "Powers its Targets while the player or a crate stands on it." },
+                Description = "Powers its Targets while the player or a crate stands on it. It starts with no Targets: drag a door, platform or camera into Targets in the Inspector." },
 
             // Swap puzzles: what can be seen, reached and traded.
             new Entry { Category = Category.SwapPuzzles, Name = "Glass Partition", Path = Environment + "Glass Partition.prefab", Placement = Placement.Floor,
                 Description = "Can be seen and swapped through, not walked through. Scale Y and Z to fit the room." },
-            new Entry { Category = Category.SwapPuzzles, Name = "Swap Crate", Path = Environment + "Swap Crate.prefab", Placement = Placement.Floor,
-                Description = "A physics crate the player can swap with. It also weighs down a Pressure Pad." },
+            new Entry { Category = Category.SwapPuzzles, Name = "Swap Crate", Path = Environment + "Swap Crate (Housing).prefab", Placement = Placement.Floor,
+                Description = "The pale physics crate from Playtest_Full, which the player can swap with. It also weighs down a Pressure Pad." },
             new Entry { Category = Category.SwapPuzzles, Name = "Swap Beacon", Path = Environment + "Swap Beacon.prefab", Placement = Placement.Floor, HeightOffset = 2f,
                 Description = "A swap target that stays where it is placed, for swaps in mid-air." },
             new Entry { Category = Category.SwapPuzzles, Name = "Swap Housing", Path = "Assets/Prefabs/Architecture/Swap Housing.prefab", Placement = Placement.Floor,
@@ -95,7 +95,7 @@ namespace TheSpaceBetween.EditorTools
             new Entry { Category = Category.LevelFlow, Name = "Room Reset", Path = Level + "Room Reset.prefab", Placement = Placement.PivotOnFloor,
                 Description = "R, or touching a hazard, puts the player back at its Entry Point. Resize its Box Collider to the room." },
             new Entry { Category = Category.LevelFlow, Name = "Observation Point", Path = Level + "Observation Point.prefab", Placement = Placement.PivotOnFloor, HeightOffset = 1f,
-                Description = "Press E near it to look from its Camera Anchor at its Look Target. Move those two children to frame the view." },
+                Description = "Press E near it to look from its Camera Anchor at its Look Target. Move those two children to frame the view. Needs an Observation Camera Controller in the scene." },
             new Entry { Category = Category.LevelFlow, Name = "Level Goal", Path = Level + "Level Goal.prefab", Placement = Placement.Floor,
                 Description = "Ends the level when the player enters its box." }
         };
@@ -151,6 +151,49 @@ namespace TheSpaceBetween.EditorTools
             }
 
             return missing;
+        }
+
+        /// <summary>
+        /// What a placed element still needs before it works, and how it is set up. Empty when there is nothing to say.
+        /// </summary>
+        public static List<(string text, MessageType type)> Advice(GameObject instance)
+        {
+            var advice = new List<(string, MessageType)>();
+            var point = instance.GetComponentInChildren<ObservationPoint>(true);
+            if (point != null)
+            {
+                if (Object.FindAnyObjectByType<ObservationCameraController>(FindObjectsInactive.Include) == null)
+                {
+                    advice.Add(("This scene has no Observation Camera Controller, so the point stays unavailable in Play. Add one to the scene (Playtest_Full and Observation_Chamber have one), with a Cinemachine Brain on the Main Camera.", MessageType.Warning));
+                }
+
+                var so = new SerializedObject(point);
+                if (so.FindProperty("cameraAnchor").objectReferenceValue == null || so.FindProperty("lookTarget").objectReferenceValue == null)
+                {
+                    advice.Add(("Its Camera Anchor or Look Target is empty, so it stays unavailable. Assign both in the Inspector.", MessageType.Warning));
+                }
+                else
+                {
+                    advice.Add(("Frame the view by moving its two children: Camera Anchor is where the camera goes, Look Target is what it looks at. The player presses E within its radius.", MessageType.None));
+                }
+            }
+
+            foreach (ControlPanel panel in instance.GetComponentsInChildren<ControlPanel>(true))
+            {
+                SerializedProperty targets = new SerializedObject(panel).FindProperty("targets");
+                bool any = false;
+                for (int i = 0; i < targets.arraySize; i++)
+                {
+                    any |= targets.GetArrayElementAtIndex(i).objectReferenceValue != null;
+                }
+
+                if (!any)
+                {
+                    advice.Add(("Switches nothing yet. Select it and drag a door, platform or camera into Targets in the Inspector.", MessageType.Warning));
+                }
+            }
+
+            return advice;
         }
 
         /// <summary>The space a prefab's meshes and box colliders take up, relative to its pivot.</summary>

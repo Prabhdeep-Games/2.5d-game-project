@@ -100,6 +100,7 @@ namespace TheSpaceBetween.EditorTools
         private const float PanelProud = 0.02f;
         private const float PanelGrid = 2f;
         private const float PanelMargin = 1.4f;
+        private const float PatchFixtureGap = 0.3f;
         private const int PanelMinimumRows = 1;
         private const int PanelMaximumRows = 3;
         private const float BarrierEntryClearance = 5f;
@@ -172,6 +173,7 @@ namespace TheSpaceBetween.EditorTools
         private readonly HashSet<int> crossWallLines = new HashSet<int>();
         private readonly HashSet<int> windowBays = new HashSet<int>();
         private readonly HashSet<int> recessBays = new HashSet<int>();
+        private readonly HashSet<int> wallFixtureBays = new HashSet<int>();
         private int partitionLine = -1;
         private int cameraBay = -1;
         private bool hasExitDoor;
@@ -405,6 +407,38 @@ namespace TheSpaceBetween.EditorTools
             {
                 plan.MissingPieces += recesses;
                 plan.Notes.Add($"{recesses} recess(es) did not fit, because no free bays were left.");
+            }
+
+            DecideWallFixtures();
+        }
+
+        // Wall fixtures go on the back wall of bays without a window or a recess, every so many of those bays, so turning
+        // them on always gives fixtures when any bay has a plain wall. They are decided before the repair patches, which
+        // then keep clear of them.
+        private void DecideWallFixtures()
+        {
+            if (!settings.WallFixtures)
+            {
+                return;
+            }
+
+            var plain = new List<int>();
+            for (int i = 0; i < bayCount; i++)
+            {
+                if (!windowBays.Contains(i) && !recessBays.Contains(i))
+                {
+                    plain.Add(i);
+                }
+            }
+
+            for (int k = 0; k < plain.Count; k += settings.FixtureEveryBays)
+            {
+                wallFixtureBays.Add(plain[k]);
+            }
+
+            if (wallFixtureBays.Count == 0)
+            {
+                plan.LightingNotes.Add("Wall Fixtures: every bay has a window or a sealed recess, so there is no plain wall to hang one on.");
             }
         }
 
@@ -938,25 +972,29 @@ namespace TheSpaceBetween.EditorTools
             }
         }
 
+        // Repair patches are flat panels of a near-matching concrete on the back wall. They can share a bay with a wall
+        // fixture, but then stop below it, so the two never overlap or share a face.
         private void AddRepairPanels()
         {
-            // A wall fixture sits flat on the wall too, so the two would share their back faces.
             var free = new List<int>();
             for (int i = 0; i < bayCount; i++)
             {
-                if (!windowBays.Contains(i) && !recessBays.Contains(i) && !HasWallFixture(i) && (i + 1) * bay <= flatEnd + 0.01f)
+                if (!windowBays.Contains(i) && !recessBays.Contains(i) && BackWallIsSeen(i))
                 {
                     free.Add(i);
                 }
             }
 
+            int placed = 0;
             for (int count = 0; count < settings.RepairPanels && free.Count > 0; count++)
             {
                 int pick = random.Next(free.Count);
                 int index = free[pick];
                 free.RemoveAt(pick);
 
-                float room = bay - PanelMargin * 2f;
+                // Only the part of the bay inside the room, so a patch never reaches into an end wall.
+                float left = Mathf.Max(index * bay, wall) + PanelMargin;
+                float room = Mathf.Min((index + 1) * bay, width - wall) - PanelMargin - left;
                 if (room < PanelGrid)
                 {
                     continue;
@@ -965,11 +1003,58 @@ namespace TheSpaceBetween.EditorTools
                 int columns = Mathf.FloorToInt(room / PanelGrid);
                 int across = random.Next(1, Mathf.Min(columns, 3) + 1);
                 int rows = random.Next(PanelMinimumRows, PanelMaximumRows + 1);
-                float x0 = index * bay + PanelMargin + random.Next(columns - across + 1) * PanelGrid;
+                float x0 = left + random.Next(columns - across + 1) * PanelGrid;
+                float x1 = x0 + across * PanelGrid;
                 int levels = Mathf.Max(1, Mathf.FloorToInt((height - 1f) / PanelGrid) - rows + 1);
                 float y0 = random.Next(Mathf.Min(levels, 3)) * PanelGrid;
-                Block("Repair Panel " + (index + 1), RoomGroup.Structure, x0, x0 + across * PanelGrid, y0, Mathf.Min(y0 + rows * PanelGrid, height), backZ - PanelProud, backZ, RepairMaterial(), false);
+                float y1 = Mathf.Min(y0 + rows * PanelGrid, height);
+
+                if (wallFixtureBays.Contains(index))
+                {
+                    Rect fixture = WallFixtureRect(index);
+                    bool overlaps = x0 < fixture.xMax + PatchFixtureGap && x1 > fixture.xMin - PatchFixtureGap
+                        && y0 < fixture.yMax + PatchFixtureGap && y1 > fixture.yMin - PatchFixtureGap;
+                    if (overlaps)
+                    {
+                        // Stop below the fixture, starting from the floor if the patch began too high for a whole row.
+                        float limit = fixture.yMin - PatchFixtureGap;
+                        if (y0 + PanelGrid > limit)
+                        {
+                            y0 = 0f;
+                        }
+
+                        int fit = Mathf.FloorToInt((limit - y0) / PanelGrid);
+                        if (fit < 1)
+                        {
+                            continue;
+                        }
+
+                        y1 = y0 + Mathf.Min(rows, fit) * PanelGrid;
+                    }
+                }
+
+                Block("Repair Patch " + (index + 1), RoomGroup.Structure, x0, x1, y0, y1, backZ - PanelProud, backZ, RepairMaterial(), false);
+                placed++;
             }
+
+            if (placed < settings.RepairPanels)
+            {
+                plan.Notes.Add($"Repair Patches: {placed} of {settings.RepairPanels} placed. The other bays have a window, a sealed recess, the climb in front of them, or too little plain wall.");
+            }
+        }
+
+        // Stairs, a curve or a shaft stand in front of the back wall of the bays they climb through.
+        private bool BackWallIsSeen(int index)
+        {
+            return levelChange == RoomLevelChange.None || (index + 1) * bay <= flatEnd + 0.01f;
+        }
+
+        // The face of a bay's wall fixture on the back wall, in x (along the room) and y (height).
+        private Rect WallFixtureRect(int index)
+        {
+            float x = ClearBayCenter(index);
+            float y = Mathf.Min(FloorAt(x) + settings.OpeningHeight + WallFixtureAboveOpening, height - WallFixtureBelowCeiling);
+            return new Rect(x - WallFixtureWidth * 0.5f, y - WallFixtureHeight * 0.5f, WallFixtureWidth, WallFixtureHeight);
         }
 
         // A repair is a near match, not a highlight: the closest other concrete to the wall.
@@ -1328,6 +1413,17 @@ namespace TheSpaceBetween.EditorTools
                 float intensity = Vary(settings.Brightness) * distance * distance;
                 AddLight(name + " Light", LightType.Spot, new Vector3(x, lightY, SpotOffsetZ), intensity, distance * SpotRangeFactor, settings.SpotAngle, shadowed.Contains(index));
             }
+
+            plan.CeilingFixtureCount = positions.Count;
+            plan.CeilingFixturesLit = positions.Count - failed.Count;
+            if (positions.Count == 0)
+            {
+                plan.LightingNotes.Add("Ceiling Fixtures: the security camera takes the only bay, so no ceiling fixture fits. Use a longer room or narrower bays.");
+            }
+            else if (plan.CeilingFixturesLit * 2 < positions.Count)
+            {
+                plan.LightingNotes.Add($"Only {plan.CeilingFixturesLit} of {positions.Count} ceiling fixtures give light; the rest have failed. Lower Failed Fixtures for a brighter room.");
+            }
         }
 
         private void AddWallFixtures()
@@ -1337,31 +1433,24 @@ namespace TheSpaceBetween.EditorTools
                 return;
             }
 
-            var positions = new List<int>();
-            for (int i = 0; i < bayCount; i++)
-            {
-                if (HasWallFixture(i))
-                {
-                    positions.Add(i);
-                }
-            }
+            var positions = new List<int>(wallFixtureBays);
+            positions.Sort();
 
             HashSet<int> failed = PickFailed(positions);
             foreach (int index in positions)
             {
-                float x = ClearBayCenter(index);
-                float floorHere = FloorAt(x);
-                float y = Mathf.Min(floorHere + settings.OpeningHeight + WallFixtureAboveOpening, height - WallFixtureBelowCeiling);
+                Rect face = WallFixtureRect(index);
                 string name = "Wall Fixture " + (index + 1);
-                float halfWidth = WallFixtureWidth * 0.5f;
-                float halfHeight = WallFixtureHeight * 0.5f;
                 bool isFailed = failed.Contains(index);
-                Block(name, RoomGroup.LightFixtures, x - halfWidth, x + halfWidth, y - halfHeight, y + halfHeight, backZ - WallFixtureProud, backZ, isFailed ? RoomMaterial.DeepShadow : RoomMaterial.Steel, false);
+                Block(name, RoomGroup.LightFixtures, face.xMin, face.xMax, face.yMin, face.yMax, backZ - WallFixtureProud, backZ, isFailed ? RoomMaterial.DeepShadow : RoomMaterial.Steel, false);
                 if (!isFailed)
                 {
-                    AddLight(name + " Light", LightType.Point, new Vector3(x, y, backZ - WallLightOffset), Vary(settings.Brightness) * WallLightDistance * WallLightDistance, WallLightRange, 0f, false);
+                    AddLight(name + " Light", LightType.Point, new Vector3(face.center.x, face.center.y, backZ - WallLightOffset), Vary(settings.Brightness) * WallLightDistance * WallLightDistance, WallLightRange, 0f, false);
                 }
             }
+
+            plan.WallFixtureCount = positions.Count;
+            plan.WallFixturesLit = positions.Count - failed.Count;
         }
 
         private HashSet<int> PickFailed(List<int> positions)
@@ -1483,11 +1572,6 @@ namespace TheSpaceBetween.EditorTools
         }
 
         //==================== HELPERS =====================
-        private bool HasWallFixture(int index)
-        {
-            return settings.WallFixtures && index % settings.FixtureEveryBays == 0 && !windowBays.Contains(index) && !recessBays.Contains(index);
-        }
-
         // Where the climbing part of the floor ends: the first landing step or the start of the ledge.
         private float LevelChangeEnd()
         {

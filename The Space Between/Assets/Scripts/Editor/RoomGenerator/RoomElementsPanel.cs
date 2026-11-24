@@ -33,18 +33,17 @@ namespace TheSpaceBetween.EditorTools
             keepRoomSelected = keepRoomSelectedOnAdd;
         }
 
-        /// <summary>Draws the panel for a room. A puzzle level lists the puzzle categories first.</summary>
-        public void Draw(GeneratedRoom room, bool isPuzzleLevel)
+        /// <summary>Draws the panel for a room.</summary>
+        public void Draw(GeneratedRoom room)
         {
-            EditorGUILayout.LabelField("Elements", EditorStyles.boldLabel);
             if (room == null)
             {
                 EditorGUILayout.HelpBox("Select or generate a room to add gameplay elements to it.", MessageType.None);
                 return;
             }
 
-            EditorGUILayout.LabelField("Adds at the Scene view's centre, or the middle of the room. Move it with the usual tools.", EditorStyles.wordWrappedMiniLabel);
-            foreach (RoomElementCatalog.Category category in OrderedCategories(isPuzzleLevel))
+            EditorGUILayout.LabelField("Add places the prefab at the Scene view's centre, or the middle of the room, on the floor or under the ceiling. Move it with the usual tools. Elements are never removed by Rebuild or Clear.", EditorStyles.wordWrappedMiniLabel);
+            foreach (RoomElementCatalog.Category category in (RoomElementCatalog.Category[])System.Enum.GetValues(typeof(RoomElementCatalog.Category)))
             {
                 DrawCategory(room, category);
             }
@@ -52,26 +51,6 @@ namespace TheSpaceBetween.EditorTools
             DrawOtherPrefab(room);
             EditorGUILayout.Space();
             DrawPlaced(room);
-        }
-
-        private static IEnumerable<RoomElementCatalog.Category> OrderedCategories(bool isPuzzleLevel)
-        {
-            var all = (RoomElementCatalog.Category[])System.Enum.GetValues(typeof(RoomElementCatalog.Category));
-            foreach (RoomElementCatalog.Category category in all)
-            {
-                if (RoomElementCatalog.IsPuzzleCategory(category) == isPuzzleLevel)
-                {
-                    yield return category;
-                }
-            }
-
-            foreach (RoomElementCatalog.Category category in all)
-            {
-                if (RoomElementCatalog.IsPuzzleCategory(category) != isPuzzleLevel)
-                {
-                    yield return category;
-                }
-            }
         }
 
         private void DrawCategory(GeneratedRoom room, RoomElementCatalog.Category category)
@@ -150,39 +129,29 @@ namespace TheSpaceBetween.EditorTools
             }
         }
 
-        // Position and rotation are relative to the room, so a room can be moved without its arrangement changing.
+        // Moving, rotating and configuring an element is done in the Scene view and the Inspector, like any object, so the list
+        // only finds and removes elements, and says what an element still needs before it works.
         private static void DrawElement(GeneratedRoom room, GameObject instance)
         {
-            Transform t = instance.transform;
-            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            using (new EditorGUILayout.HorizontalScope())
             {
-                using (new EditorGUILayout.HorizontalScope())
+                EditorGUILayout.LabelField(new GUIContent(instance.name, "Select it to move it with the Scene view tools and change its values in the Inspector."));
+                if (GUILayout.Button("Select", EditorStyles.miniButtonLeft, GUILayout.Width(RowButtonWidth)))
                 {
-                    EditorGUILayout.LabelField(instance.name, EditorStyles.boldLabel);
-                    if (GUILayout.Button("Select", GUILayout.Width(RowButtonWidth)))
-                    {
-                        Selection.activeGameObject = instance;
-                        SceneView.lastActiveSceneView?.FrameSelected();
-                    }
-
-                    if (GUILayout.Button("Remove", GUILayout.Width(RowButtonWidth + 8f)))
-                    {
-                        RoomBuilder.RemoveElement(room, instance);
-                        GUIUtility.ExitGUI();
-                    }
+                    Selection.activeGameObject = instance;
+                    SceneView.lastActiveSceneView?.FrameSelected();
                 }
 
-                EditorGUI.BeginChangeCheck();
-                Vector3 position = EditorGUILayout.Vector3Field("Position", room.transform.InverseTransformPoint(t.position));
-                Vector3 rotation = EditorGUILayout.Vector3Field("Rotation", t.localEulerAngles);
-                Vector3 scale = EditorGUILayout.Vector3Field("Scale", t.localScale);
-                if (EditorGUI.EndChangeCheck())
+                if (GUILayout.Button("Remove", EditorStyles.miniButtonRight, GUILayout.Width(RowButtonWidth + 8f)))
                 {
-                    Undo.RecordObject(t, "Move Room Element");
-                    t.position = room.transform.TransformPoint(position);
-                    t.localEulerAngles = rotation;
-                    t.localScale = scale;
+                    RoomBuilder.RemoveElement(room, instance);
+                    GUIUtility.ExitGUI();
                 }
+            }
+
+            foreach ((string text, MessageType type) in RoomElementCatalog.Advice(instance))
+            {
+                EditorGUILayout.HelpBox(text, type);
             }
         }
 

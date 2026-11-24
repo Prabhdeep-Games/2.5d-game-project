@@ -205,6 +205,17 @@ namespace TheSpaceBetween.EditorTools
         /// <summary>Things the designer should know, such as what still blocks the route.</summary>
         public readonly List<string> Notes = new List<string>();
 
+        /// <summary>Things to know about the room's light, shown with the lighting values.</summary>
+        public readonly List<string> LightingNotes = new List<string>();
+
+        /// <summary>How many ceiling fixtures the room has, and how many of them give light. The rest have failed.</summary>
+        public int CeilingFixtureCount;
+        public int CeilingFixturesLit;
+
+        /// <summary>How many wall fixtures the room has, and how many of them give light. The rest have failed.</summary>
+        public int WallFixtureCount;
+        public int WallFixturesLit;
+
         public Vector3 ExitOffset;
 
         /// <summary>How much further back the game camera sits in this room, so a tall room can be read. 0 adds no camera zone.</summary>

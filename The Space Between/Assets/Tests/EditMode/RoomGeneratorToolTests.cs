@@ -373,7 +373,7 @@ namespace TheSpaceBetween.Tests
         {
             RoomSettings settings = Settings(RoomPurpose.ContainmentCell);
             GeneratedRoom room = RoomBuilder.CreateRoom(settings, Vector3.zero);
-            GameObject crate = AddCatalogElement(room, RoomElementCatalog.Find(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Environment/Swap Crate.prefab")), 6f);
+            GameObject crate = AddCatalogElement(room, RoomElementCatalog.Find(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Environment/Swap Crate (Housing).prefab")), 6f);
             var unrelated = new GameObject("Unrelated");
             GeneratedRoom other = RoomBuilder.CreateRoom(Settings(RoomPurpose.RestrictedCorridor), new Vector3(100f, 0f, 0f));
             int otherCount = other.GetComponentsInChildren<Transform>().Length;
@@ -413,7 +413,7 @@ namespace TheSpaceBetween.Tests
         {
             GeneratedRoom room = RoomBuilder.CreateRoom(Settings(RoomPurpose.ObservationChamber), Vector3.zero);
             Undo.IncrementCurrentGroup();
-            GameObject crate = AddCatalogElement(room, RoomElementCatalog.Find(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Environment/Swap Crate.prefab")), 6f);
+            GameObject crate = AddCatalogElement(room, RoomElementCatalog.Find(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Environment/Swap Crate (Housing).prefab")), 6f);
             Undo.PerformUndo();
             Assert.IsTrue(crate == null);
             Assert.IsTrue(room != null, "Undoing the element should leave the room.");
@@ -598,6 +598,212 @@ namespace TheSpaceBetween.Tests
             RoomFitting.MakeRoomFor(values, before);
             Assert.AreEqual(8f, values.Height, "A height set by hand is kept, and the plan reports what it needs instead.");
             Assert.IsFalse(RoomLayout.Create(values).CanBuild);
+        }
+
+        //==================== BAYS, FIXTURES AND PATCHES =====================
+        private static int CountBlocks(RoomPlan plan, string prefix, string suffix = "")
+        {
+            int count = 0;
+            foreach (BlockPlan block in plan.Blocks)
+            {
+                if (block.Name.StartsWith(prefix) && block.Name.EndsWith(suffix))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        [Test]
+        public void WallFixtures_LeaveRecessesAndRepairPatchesInPlace_InEveryPurpose()
+        {
+            foreach (RoomPurpose purpose in System.Enum.GetValues(typeof(RoomPurpose)))
+            {
+                for (int seed = 1; seed <= 5; seed++)
+                {
+                    RoomSettings off = Settings(purpose, seed);
+                    Set(off, "wallFixtures", false);
+                    RoomSettings on = off.Clone();
+                    Set(on, "wallFixtures", true);
+                    RoomPlan planOff = RoomLayout.Create(off);
+                    RoomPlan planOn = RoomLayout.Create(on);
+                    string context = $"{purpose}, seed {seed}";
+                    Assert.AreEqual(CountBlocks(planOff, "Recess", "Plate"), CountBlocks(planOn, "Recess", "Plate"), context);
+                    Assert.AreEqual(CountBlocks(planOff, "Repair Patch"), CountBlocks(planOn, "Repair Patch"), context);
+                }
+            }
+        }
+
+        [Test]
+        public void WallFixtures_AppearInTheObservationChamber()
+        {
+            RoomSettings settings = Settings(RoomPurpose.ObservationChamber);
+            Set(settings, "wallFixtures", true);
+            RoomPlan plan = RoomLayout.Create(settings);
+            Assert.Greater(plan.WallFixtureCount, 0, "The chamber has a bay with a plain wall, so Wall Fixtures should add one.");
+            Assert.AreEqual(plan.WallFixtureCount, CountBlocks(plan, "Wall Fixture"));
+        }
+
+        [Test]
+        public void RepairPatches_NeverOverlapAWallFixture()
+        {
+            foreach (RoomPurpose purpose in System.Enum.GetValues(typeof(RoomPurpose)))
+            {
+                for (int seed = 1; seed <= 10; seed++)
+                {
+                    RoomSettings settings = Settings(purpose, seed);
+                    Set(settings, "wallFixtures", true);
+                    Set(settings, "repairPanels", 8);
+                    RoomPlan plan = RoomLayout.Create(settings);
+                    foreach (BlockPlan patch in plan.Blocks)
+                    {
+                        if (!patch.Name.StartsWith("Repair Patch"))
+                        {
+                            continue;
+                        }
+
+                        var patchBounds = new Bounds(patch.Center, patch.Size);
+                        foreach (BlockPlan fixture in plan.Blocks)
+                        {
+                            if (fixture.Name.StartsWith("Wall Fixture"))
+                            {
+                                Assert.IsFalse(patchBounds.Intersects(new Bounds(fixture.Center, fixture.Size)), $"{patch.Name} meets {fixture.Name} in {purpose}, seed {seed}.");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        [Test]
+        public void ObservationChamber_GetsARepairPatch_AndSaysWhenNotAllFit()
+        {
+            RoomSettings settings = Settings(RoomPurpose.ObservationChamber);
+            RoomPlan plan = RoomLayout.Create(settings);
+            int patches = CountBlocks(plan, "Repair Patch");
+            Assert.Greater(patches, 0);
+            if (patches < settings.RepairPanels)
+            {
+                Assert.IsTrue(plan.Notes.Exists(n => n.StartsWith("Repair Patches:")), "A shortfall should be reported.");
+            }
+        }
+
+        //==================== LIGHTING SUMMARY =====================
+        [Test]
+        public void LightingSummary_CountsLitFixtures_AndWarnsWhenMostHaveFailed()
+        {
+            RoomSettings settings = Settings(RoomPurpose.RestrictedCorridor);
+            Set(settings, "failedFixtures", 0.75f);
+            RoomPlan plan = RoomLayout.Create(settings);
+            int spots = 0;
+            foreach (LightPlan light in plan.Lights)
+            {
+                spots += light.Type == LightType.Spot ? 1 : 0;
+            }
+
+            Assert.AreEqual(CountBlocks(plan, "Ceiling Fixture", "Panel"), plan.CeilingFixtureCount);
+            Assert.AreEqual(spots, plan.CeilingFixturesLit);
+            Assert.GreaterOrEqual(plan.CeilingFixturesLit, 1, "At least one ceiling fixture always works.");
+            Assert.Less(plan.CeilingFixturesLit * 2, plan.CeilingFixtureCount);
+            Assert.IsTrue(plan.LightingNotes.Exists(n => n.Contains("give light")), "Most fixtures failing should be pointed out.");
+        }
+
+        //==================== PRESET OVERWRITE =====================
+        [Test]
+        public void SavingOverAPreset_ReplacesItInPlace_AndKeepsItsNotes()
+        {
+            GeneratedRoom room = RoomBuilder.CreateRoom(Settings(RoomPurpose.ObservationChamber), Vector3.zero);
+            RoomPreset first = RoomBuilder.SavePreset(room, TempPresetPath);
+            string guid = AssetDatabase.AssetPathToGUID(TempPresetPath);
+            var so = new SerializedObject(first);
+            so.FindProperty("notes").stringValue = "Keep me";
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            AddCatalogElement(room, RoomElementCatalog.Find(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Environment/Swap Beacon.prefab")), 10f);
+            RoomPreset second = RoomBuilder.SavePreset(room, TempPresetPath);
+
+            Assert.AreSame(first, second);
+            Assert.AreEqual(guid, AssetDatabase.AssetPathToGUID(TempPresetPath));
+            Assert.AreEqual(1, second.Elements.Count, "The replaced preset should hold the room as it is now.");
+            Assert.AreEqual("Keep me", second.Notes);
+            Assert.AreEqual(1, AssetDatabase.FindAssets("Temp Room Preset", new[] { "Assets/Tests/EditMode" }).Length, "No second copy should be made.");
+        }
+
+        //==================== ELEMENT ADVICE =====================
+        [Test]
+        public void ElementAdvice_FlagsAPadWithoutTargets_AndAnObservationPointWithoutItsCamera()
+        {
+            GeneratedRoom room = RoomBuilder.CreateRoom(Settings(RoomPurpose.ObservationChamber), Vector3.zero);
+            GameObject pad = AddCatalogElement(room, RoomElementCatalog.Find(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Environment/Pressure Pad.prefab")), 12f);
+            Assert.IsTrue(RoomElementCatalog.Advice(pad).Exists(a => a.type == MessageType.Warning && a.text.Contains("Targets")));
+
+            GameObject door = AddCatalogElement(room, RoomElementCatalog.Find(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Environment/Security Door.prefab")), 20f);
+            var panel = new SerializedObject(pad.GetComponent<ControlPanel>());
+            SerializedProperty targets = panel.FindProperty("targets");
+            targets.arraySize = 1;
+            targets.GetArrayElementAtIndex(0).objectReferenceValue = door.GetComponentInChildren<Mechanism>();
+            panel.ApplyModifiedPropertiesWithoutUndo();
+            Assert.IsFalse(RoomElementCatalog.Advice(pad).Exists(a => a.text.Contains("Targets")));
+
+            GameObject point = AddCatalogElement(room, RoomElementCatalog.Find(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Level/Observation Point.prefab")), 6f);
+            Assert.IsTrue(RoomElementCatalog.Advice(point).Exists(a => a.text.Contains("Observation Camera Controller")));
+            new GameObject("Observation Camera").AddComponent<ObservationCameraController>();
+            Assert.IsFalse(RoomElementCatalog.Advice(point).Exists(a => a.text.Contains("Observation Camera Controller")));
+        }
+
+        //==================== SWAP CRATE =====================
+        [Test]
+        public void SwapCrate_InTheCatalog_IsThePaleCrateFromPlaytestFull()
+        {
+            RoomElementCatalog.Entry entry = null;
+            foreach (RoomElementCatalog.Entry candidate in RoomElementCatalog.Entries)
+            {
+                if (candidate.Name == "Swap Crate")
+                {
+                    entry = candidate;
+                }
+            }
+
+            Assert.IsNotNull(entry);
+            GameObject prefab = RoomElementCatalog.Load(entry);
+            Assert.AreEqual(PrefabAssetType.Variant, PrefabUtility.GetPrefabAssetType(prefab), "It should be a variant of the crate, not a copy.");
+            Assert.AreEqual("Assets/Prefabs/Environment/Swap Crate.prefab", AssetDatabase.GetAssetPath(PrefabUtility.GetCorrespondingObjectFromSource(prefab)));
+            Assert.AreEqual("ARC_SwapHousing", prefab.GetComponentInChildren<MeshRenderer>().sharedMaterial.name);
+            Assert.IsNotNull(prefab.GetComponent<Swappable>());
+            Assert.IsNotNull(prefab.GetComponent<Rigidbody>());
+        }
+
+        //==================== NEW ROOM PLACEMENT =====================
+        [Test]
+        public void Window_NewRoomOrigin_FollowsThePlacement()
+        {
+            bool wasOpen = HasOpenInstances();
+            GeneratedRoom room = RoomBuilder.CreateRoom(Settings(RoomPurpose.ContainmentCell), new Vector3(10f, 2f, 0f));
+            RoomGeneratorWindow.Open();
+            RoomGeneratorWindow window = EditorWindow.GetWindow<RoomGeneratorWindow>();
+            BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            try
+            {
+                typeof(RoomGeneratorWindow).GetField("placement", flags).SetValue(window, RoomGeneratorWindow.Placement.AtPosition);
+                typeof(RoomGeneratorWindow).GetField("newRoomPosition", flags).SetValue(window, new Vector3(50f, 0f, 0f));
+                Assert.AreEqual(new Vector3(50f, 0f, 0f), window.NewRoomOrigin());
+
+                Selection.activeGameObject = room.gameObject;
+                typeof(RoomGeneratorWindow).GetMethod("OnSelectionChanged", flags).Invoke(window, null);
+                Assert.AreEqual(new Vector3(50f, 0f, 0f), window.NewRoomOrigin(), "At Position ignores the selection.");
+
+                typeof(RoomGeneratorWindow).GetField("placement", flags).SetValue(window, RoomGeneratorWindow.Placement.AfterSelectedRoom);
+                Assert.AreEqual(room.transform.position + room.ExitOffset, window.NewRoomOrigin());
+            }
+            finally
+            {
+                Selection.activeGameObject = null;
+                if (!wasOpen)
+                {
+                    window.Close();
+                }
+            }
         }
     }
 }

@@ -753,11 +753,13 @@ namespace TheSpaceBetween.EditorTools
         //==================== PRESETS =====================
         /// <summary>
         /// Saves the room's values and its elements, relative to the room, as a preset asset. Only prefab instances can be
-        /// made again, so other objects in the Elements group are left out, with a warning.
+        /// made again, so other objects in the Elements group are left out, with a warning. Each element keeps its prefab,
+        /// position, rotation and scale; changes made on the instance in the scene, such as a panel's Targets, are not saved.
+        /// A preset already at <paramref name="assetPath"/> is replaced in place, keeping its Notes and the references to it;
+        /// the window asks before that happens.
         /// </summary>
         public static RoomPreset SavePreset(GeneratedRoom room, string assetPath)
         {
-            var preset = ScriptableObject.CreateInstance<RoomPreset>();
             var elements = new List<RoomPreset.Element>();
             foreach (GameObject element in room.FindElements())
             {
@@ -778,8 +780,25 @@ namespace TheSpaceBetween.EditorTools
                 });
             }
 
+            var existing = AssetDatabase.LoadAssetAtPath<RoomPreset>(assetPath);
+            if (existing != null)
+            {
+                Undo.RecordObject(existing, "Replace Room Preset");
+                existing.Store(room.Settings.Clone(), elements);
+                EditorUtility.SetDirty(existing);
+                AssetDatabase.SaveAssetIfDirty(existing);
+                return existing;
+            }
+
+            // Another kind of asset at this path is never replaced.
+            if (AssetDatabase.LoadMainAssetAtPath(assetPath) != null)
+            {
+                assetPath = AssetDatabase.GenerateUniqueAssetPath(assetPath);
+            }
+
+            var preset = ScriptableObject.CreateInstance<RoomPreset>();
             preset.Store(room.Settings.Clone(), elements);
-            AssetDatabase.CreateAsset(preset, AssetDatabase.GenerateUniqueAssetPath(assetPath));
+            AssetDatabase.CreateAsset(preset, assetPath);
             AssetDatabase.SaveAssets();
             return preset;
         }

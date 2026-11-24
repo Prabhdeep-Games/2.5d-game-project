@@ -6,17 +6,28 @@ namespace TheSpaceBetween.EditorTools
 {
     /// <summary>
     /// The Room Generator: choose a purpose, adjust the values and generate. With a room selected, changes apply to it
-    /// straight away, as they do on its GeneratedRoom component. Add gameplay elements, save useful rooms as presets, then
-    /// keep the result and carry on by hand. Open it from Tools > Room Generator; it docks like any other Editor window.
+    /// straight away, as they do on its GeneratedRoom component. Add gameplay elements, save useful rooms as presets, and
+    /// detach a finished room to carry on by hand. Open it from Tools > Room Generator; it docks like any other Editor window.
+    ///
+    /// Layout: a status line, then the sections Room Setup, Architecture, Elements, Lighting, Presets and Diagnostics (the
+    /// last one closed), and the generation buttons at the bottom.
     /// </summary>
     public sealed class RoomGeneratorWindow : EditorWindow
     {
+        /// <summary>Where Generate New Room puts the new room.</summary>
+        public enum Placement
+        {
+            AtPosition,
+            AfterSelectedRoom
+        }
+
         private const string MenuPath = "Tools/Room Generator";
         private const string WindowTitle = "Room Generator";
         private const string InspectorWindowType = "UnityEditor.InspectorWindow,UnityEditor";
+        private const string SectionKey = "Window.";
         private const float ButtonHeight = 28f;
         private const int MaximumRandomSeed = 100000;
-        private static readonly Vector2 MinimumSize = new Vector2(320f, 400f);
+        private static readonly Vector2 MinimumSize = new Vector2(340f, 420f);
         private static readonly Color StructureColor = new Color(1f, 1f, 1f, 0.5f);
         private static readonly Color FixtureColor = new Color(1f, 0.9f, 0.5f, 0.9f);
         private static readonly Color GalleryColor = new Color(0.6f, 0.85f, 1f, 0.8f);
@@ -24,6 +35,7 @@ namespace TheSpaceBetween.EditorTools
         private const float LightMarkerRadius = 0.3f;
 
         [SerializeField] private RoomSettings settings = new RoomSettings();
+        [SerializeField] private Placement placement = Placement.AtPosition;
         [SerializeField] private Vector3 newRoomPosition;
         [SerializeField] private bool showPreview = true;
         [SerializeField] private RoomElementsPanel elementsPanel = new RoomElementsPanel();
@@ -121,99 +133,200 @@ namespace TheSpaceBetween.EditorTools
         private void OnGUI()
         {
             serializedWindow.Update();
+            List<string> missingAssets = RoomAssetLibrary.FindMissing();
+
+            DrawStatus(missingAssets);
             scroll = EditorGUILayout.BeginScrollView(scroll);
 
-            DrawLevel();
-            DrawTarget();
-            DrawSettings();
-            EditorGUILayout.Space();
-            DrawPlanSummary();
-            EditorGUILayout.Space();
-            elementsPanel.Draw(selectedRoom, IsPuzzleLevel());
-            EditorGUILayout.Space();
-            presetsPanel.Draw(selectedRoom, settings.Purpose == RoomPurpose.Custom, newRoomPosition, LoadValues);
+            if (RoomGeneratorSections.Section(SectionKey + "Setup", "Room Setup"))
+            {
+                DrawPlacement();
+                DrawValues(RoomGeneratorSections.DrawSetup);
+            }
+
+            if (RoomGeneratorSections.Section(SectionKey + "Architecture", "Architecture"))
+            {
+                DrawValues(property =>
+                {
+                    RoomGeneratorSections.DrawArchitecture(property);
+                    return false;
+                });
+                RoomGeneratorSections.DrawNotes(plan);
+            }
+
+            if (RoomGeneratorSections.Section(SectionKey + "Elements", "Elements"))
+            {
+                elementsPanel.Draw(selectedRoom);
+            }
+
+            if (RoomGeneratorSections.Section(SectionKey + "Lighting", "Lighting"))
+            {
+                DrawValues(property =>
+                {
+                    RoomGeneratorSections.DrawLighting(property);
+                    RoomGeneratorSections.DrawLightingSummary(plan, settings);
+                    RoomGeneratorSections.DrawSceneWideLighting(property);
+                    return false;
+                });
+            }
+
+            if (RoomGeneratorSections.Section(SectionKey + "Presets", "Presets"))
+            {
+                presetsPanel.Draw(selectedRoom, settings.Purpose == RoomPurpose.Custom, NewRoomOrigin(), LoadValues);
+            }
+
+            if (RoomGeneratorSections.Section(SectionKey + "Diagnostics", "Diagnostics", false))
+            {
+                DrawDiagnostics(missingAssets);
+            }
 
             EditorGUILayout.EndScrollView();
-            DrawActions();
+
+            // Window values such as New Room Position are edited through the serialized copy, so they are written back here.
+            serializedWindow.ApplyModifiedProperties();
+            DrawActions(missingAssets);
         }
 
-        //==================== LEVEL =====================
-        private static LevelProfile FindLevelProfile()
+        // Draws a group of the room's values. Any change goes through ApplyEdit; New Seed picks a seed instead.
+        private void DrawValues(System.Func<SerializedProperty, bool> draw)
         {
-            return FindFirstObjectByType<LevelProfile>(FindObjectsInactive.Include);
+            SerializedProperty property = serializedWindow.FindProperty(nameof(settings));
+            EditorGUI.BeginChangeCheck();
+            bool newSeed = draw(property);
+            bool changed = EditorGUI.EndChangeCheck();
+            if (newSeed)
+            {
+                RandomiseSeed();
+            }
+            else if (changed)
+            {
+                ApplyEdit();
+            }
         }
 
-        /// <summary>Whether the open scenes are marked as a puzzle level by a Level Profile.</summary>
-        public static bool IsPuzzleLevel()
+        // Choosing a purpose or a lighting mode loads its values. Any other option gets the room it needs to work.
+        private void ApplyEdit()
         {
-            LevelProfile profile = FindLevelProfile();
-            return profile != null && profile.IsPuzzleLevel;
+            RoomSettings before = settings.Clone();
+            serializedWindow.ApplyModifiedProperties();
+            if (settings.Purpose != before.Purpose)
+            {
+                settings.ApplyPurpose(settings.Purpose);
+            }
+            else if (settings.LightingMode != before.LightingMode)
+            {
+                settings.ApplyLighting(settings.LightingMode);
+            }
+            else
+            {
+                RoomFitting.MakeRoomAndLog(settings, before);
+            }
+
+            serializedWindow.Update();
+            PushToSelectedRoom();
+            RefreshPlan();
         }
 
-        // IsPuzzleLevel belongs to the scene, not to a room, and only changes advice and the order elements are listed in.
-        private void DrawLevel()
+        private void RandomiseSeed()
         {
-            LevelProfile profile = FindLevelProfile();
-            if (profile == null)
+            serializedWindow.ApplyModifiedProperties();
+            Undo.RecordObject(this, "Randomise Seed");
+            settings.SetSeed(Random.Range(1, MaximumRandomSeed));
+            serializedWindow.Update();
+            PushToSelectedRoom();
+            RefreshPlan();
+        }
+
+        //==================== STATUS =====================
+        // Always visible: what the window is working on, and anything that stops a room being built or walked through.
+        private void DrawStatus(List<string> missingAssets)
+        {
+            string target = selectedRoom != null
+                ? $"Editing '{selectedRoom.name}'. Changes rebuild it straight away."
+                : "No room selected. The values below are for a new room.";
+            EditorGUILayout.HelpBox(target, MessageType.None);
+            RoomGeneratorSections.DrawProblems(plan, routeProblem, missingAssets);
+
+            GeneratedRoom occupant = !CanGenerate(out _) ? null : RoomAt(NewRoomOrigin(), settings);
+            if (occupant != null)
+            {
+                EditorGUILayout.HelpBox($"'{occupant.name}' is already at the new room's position, so the two would overlap and their walls would flicker.", MessageType.Warning);
+            }
+        }
+
+        //==================== PLACEMENT =====================
+        private void DrawPlacement()
+        {
+            EditorGUILayout.PropertyField(serializedWindow.FindProperty(nameof(placement)), new GUIContent("New Room Placement", "Where Generate New Room puts the next room. At Position uses the position below. After Selected Room starts it at the exit of the selected room, so the two connect."));
+            if (placement == Placement.AtPosition)
             {
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    EditorGUILayout.LabelField(new GUIContent("Level", "Adds a Level Profile to the scene, which records whether this is a puzzle level."), GUILayout.Width(EditorGUIUtility.labelWidth));
-                    if (GUILayout.Button("Mark As Traversal Level"))
-                    {
-                        CreateLevelProfile(false);
-                    }
-
-                    if (GUILayout.Button("Mark As Puzzle Level"))
-                    {
-                        CreateLevelProfile(true);
-                    }
+                    EditorGUILayout.PropertyField(serializedWindow.FindProperty(nameof(newRoomPosition)), new GUIContent("Position", "Where the entrance floor of the new room goes, in world space. The route runs along +X from here."));
                 }
 
-                return;
-            }
-
-            var serializedProfile = new SerializedObject(profile);
-            serializedProfile.Update();
-            EditorGUILayout.PropertyField(serializedProfile.FindProperty("isPuzzleLevel"), new GUIContent("Is Puzzle Level", serializedProfile.FindProperty("isPuzzleLevel").tooltip));
-            serializedProfile.ApplyModifiedProperties();
-        }
-
-        private static void CreateLevelProfile(bool isPuzzleLevel)
-        {
-            var go = new GameObject("Level Profile");
-            Undo.RegisterCreatedObjectUndo(go, "Add Level Profile");
-            var serializedProfile = new SerializedObject(go.AddComponent<LevelProfile>());
-            serializedProfile.FindProperty("isPuzzleLevel").boolValue = isPuzzleLevel;
-            serializedProfile.ApplyModifiedPropertiesWithoutUndo();
-        }
-
-        //==================== TARGET =====================
-        private void DrawTarget()
-        {
-            if (selectedRoom != null)
-            {
-                EditorGUILayout.HelpBox($"Editing '{selectedRoom.name}'. Changes apply to it straight away.", MessageType.None);
-                return;
-            }
-
-            EditorGUILayout.HelpBox("No generated room selected. Generate New Room makes one at the position below.", MessageType.None);
-            EditorGUILayout.PropertyField(serializedWindow.FindProperty(nameof(newRoomPosition)), new GUIContent("New Room Position", "Where the entrance floor of the new room goes. The route runs along +X."));
-
-            // Two rooms in the same place put identical walls on top of each other, which flicker.
-            GeneratedRoom occupant = RoomAt(newRoomPosition, settings);
-            if (occupant != null)
-            {
-                EditorGUILayout.HelpBox($"'{occupant.name}' is already here, so a new room would overlap it and its walls would flicker.", MessageType.Warning);
-                if (GUILayout.Button("Move To The End Of The Last Room"))
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    serializedWindow.ApplyModifiedProperties();
-                    Undo.RecordObject(this, "Move New Room Position");
-                    newRoomPosition = EndOfLastRoom();
-                    serializedWindow.Update();
-                    SceneView.RepaintAll();
+                    GUILayout.FlexibleSpace();
+                    if (GUILayout.Button(new GUIContent("After Last Room", "Set the position to the exit of the room furthest along +X."), EditorStyles.miniButtonLeft))
+                    {
+                        SetNewRoomPosition(EndOfLastRoom());
+                    }
+
+                    if (GUILayout.Button(new GUIContent("Scene View Centre", "Set the position to the point the Scene view is looking at."), EditorStyles.miniButtonRight))
+                    {
+                        SceneView view = SceneView.lastActiveSceneView;
+                        if (view != null)
+                        {
+                            SetNewRoomPosition(view.pivot);
+                        }
+                    }
                 }
             }
+            else if (selectedRoom == null)
+            {
+                EditorGUILayout.HelpBox("Select a generated room. The new room will start at its exit.", MessageType.Info);
+            }
+            else
+            {
+                EditorGUILayout.LabelField($"Starts at the exit of '{selectedRoom.name}', {(selectedRoom.transform.position + selectedRoom.ExitOffset).ToString("0.##")}.", EditorStyles.wordWrappedMiniLabel);
+            }
+        }
+
+        private void SetNewRoomPosition(Vector3 position)
+        {
+            serializedWindow.ApplyModifiedProperties();
+            Undo.RecordObject(this, "Move New Room Position");
+            newRoomPosition = position;
+            serializedWindow.Update();
+            GUI.FocusControl(null);
+            SceneView.RepaintAll();
+        }
+
+        /// <summary>Where Generate New Room would put a room now.</summary>
+        public Vector3 NewRoomOrigin()
+        {
+            if (placement == Placement.AfterSelectedRoom && selectedRoom != null)
+            {
+                return selectedRoom.transform.position + selectedRoom.ExitOffset;
+            }
+
+            return newRoomPosition;
+        }
+
+        private bool CanGenerate(out string reason)
+        {
+            reason = null;
+            if (Application.isPlaying)
+            {
+                reason = "Rooms cannot be generated during Play.";
+            }
+            else if (placement == Placement.AfterSelectedRoom && selectedRoom == null)
+            {
+                reason = "Select a room to place the new one after it, or set New Room Placement to At Position.";
+            }
+
+            return reason == null;
         }
 
         /// <summary>A generated room whose space a new room at this position would overlap, or null.</summary>
@@ -261,119 +374,26 @@ namespace TheSpaceBetween.EditorTools
             RefreshPlan();
         }
 
-        private void DrawSettings()
+        //==================== DIAGNOSTICS =====================
+        private void DrawDiagnostics(List<string> missingAssets)
         {
-            SerializedProperty property = serializedWindow.FindProperty(nameof(settings));
-            // Options that belong to a switch, such as the fog values under Scene Fog, show only while it is on.
-            EditorGUI.BeginChangeCheck();
-            ShowIfFields.DrawChildren(property, typeof(RoomSettings));
-
-            if (EditorGUI.EndChangeCheck())
+            if (missingAssets.Count == 0)
             {
-                RoomSettings before = settings.Clone();
-                serializedWindow.ApplyModifiedProperties();
-
-                // Choosing a purpose or a lighting mode loads its values. Any other option gets the room it needs to work.
-                if (settings.Purpose != before.Purpose)
-                {
-                    settings.ApplyPurpose(settings.Purpose);
-                }
-                else if (settings.LightingMode != before.LightingMode)
-                {
-                    settings.ApplyLighting(settings.LightingMode);
-                }
-                else
-                {
-                    RoomFitting.MakeRoomAndLog(settings, before);
-                }
-
-                serializedWindow.Update();
-
-                PushToSelectedRoom();
-                RefreshPlan();
+                EditorGUILayout.LabelField($"Assets: all {RoomAssetLibrary.AssetCount} materials and prefabs the generator uses were found.", EditorStyles.wordWrappedMiniLabel);
             }
 
-            if (GUILayout.Button(new GUIContent("Randomise Seed", "Choose a new seed. A selected room changes straight away.")))
-            {
-                RandomiseSeed();
-            }
-        }
-
-        private void RandomiseSeed()
-        {
-            serializedWindow.ApplyModifiedProperties();
-            Undo.RecordObject(this, "Randomise Seed");
-            settings.SetSeed(Random.Range(1, MaximumRandomSeed));
-            serializedWindow.Update();
-            PushToSelectedRoom();
-            RefreshPlan();
-        }
-
-        private void DrawPlanSummary()
-        {
-            List<string> missing = RoomAssetLibrary.FindMissing();
-            EditorGUILayout.LabelField("Assets", EditorStyles.boldLabel);
-            if (missing.Count > 0)
-            {
-                EditorGUILayout.HelpBox("Missing:\n" + string.Join("\n", missing), MessageType.Error);
-            }
-            else
-            {
-                EditorGUILayout.LabelField($"All {RoomAssetLibrary.AssetCount} materials and prefabs found.");
-            }
-
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("This Room", EditorStyles.boldLabel);
-            foreach (string error in plan.Errors)
-            {
-                EditorGUILayout.HelpBox(error, MessageType.Error);
-            }
-
-            if (!plan.CanBuild)
-            {
-                return;
-            }
-
-            int shadows = 0;
-            foreach (LightPlan light in plan.Lights)
-            {
-                shadows += light.Shadows ? 1 : 0;
-            }
-
-            EditorGUILayout.LabelField($"{plan.Blocks.Count + plan.Curves.Count} pieces, {plan.Prefabs.Count} prefabs, {plan.Lights.Count} lights ({shadows} with shadows)");
-            if (routeProblem != null)
-            {
-                EditorGUILayout.HelpBox("Route: " + routeProblem, MessageType.Warning);
-            }
-            else
-            {
-                EditorGUILayout.LabelField("Route: floor and headroom are clear from entrance to exit.");
-            }
-
-            foreach (string note in plan.Notes)
-            {
-                EditorGUILayout.HelpBox(note, MessageType.Info);
-            }
-
-            if (!IsPuzzleLevel())
-            {
-                foreach (string breaker in FlowBreakers(settings, plan))
-                {
-                    EditorGUILayout.HelpBox("Traversal level: " + breaker, MessageType.Warning);
-                }
-            }
-
+            RoomGeneratorSections.DrawDiagnostics(plan, settings, routeProblem);
             DrawFlickerCheck();
 
             EditorGUI.BeginChangeCheck();
-            showPreview = EditorGUILayout.Toggle(new GUIContent("Scene View Preview", "Draw an outline of this room in the Scene view before it is generated."), showPreview);
+            showPreview = EditorGUILayout.Toggle(new GUIContent("Scene View Preview", "Draw an outline of the new room in the Scene view while no room is selected."), showPreview);
             if (EditorGUI.EndChangeCheck())
             {
                 SceneView.RepaintAll();
             }
         }
 
-        /// <summary>What in a room stops a player who is running through it. Only reported in a traversal level.</summary>
+        /// <summary>What in a room stops a player who is running through it.</summary>
         public static List<string> FlowBreakers(RoomSettings values, RoomPlan roomPlan)
         {
             var breakers = new List<string>();
@@ -406,25 +426,23 @@ namespace TheSpaceBetween.EditorTools
         // Checking every surface takes a moment in a large room, so it runs on request.
         private void DrawFlickerCheck()
         {
-            if (selectedRoom == null)
+            using (new EditorGUI.DisabledScope(selectedRoom == null))
             {
-                return;
+                if (GUILayout.Button(new GUIContent("Check For Flickering Surfaces", "Looks for faces of different objects in the selected room that lie on top of each other, which flicker in the Scene and Game views.")))
+                {
+                    lastFlickerCheck = RoomGeometryCheck.FindOverlaps(selectedRoom.gameObject);
+                    lastFlickerRoom = selectedRoom;
+                }
             }
 
-            if (GUILayout.Button(new GUIContent("Check For Flickering Surfaces", "Looks for faces of different objects in this room that lie on top of each other, which flicker in the Scene and Game views.")))
-            {
-                lastFlickerCheck = RoomGeometryCheck.FindOverlaps(selectedRoom.gameObject);
-                lastFlickerRoom = selectedRoom;
-            }
-
-            if (lastFlickerCheck == null || lastFlickerRoom != selectedRoom)
+            if (lastFlickerCheck == null || lastFlickerRoom != selectedRoom || selectedRoom == null)
             {
                 return;
             }
 
             if (lastFlickerCheck.Count == 0)
             {
-                EditorGUILayout.LabelField("No overlapping surfaces found.");
+                EditorGUILayout.LabelField("No overlapping surfaces found.", EditorStyles.wordWrappedMiniLabel);
                 return;
             }
 
@@ -437,29 +455,27 @@ namespace TheSpaceBetween.EditorTools
             EditorGUILayout.HelpBox($"{lastFlickerCheck.Count} pair(s) of surfaces overlap and will flicker:\n" + string.Join("\n", lines), MessageType.Warning);
         }
 
-        private void DrawActions()
+        //==================== ACTIONS =====================
+        private void DrawActions(List<string> missingAssets)
         {
-            using (new EditorGUI.DisabledScope(Application.isPlaying || !plan.CanBuild || RoomAssetLibrary.FindMissing().Count > 0))
+            bool canGenerate = CanGenerate(out string reason) && plan.CanBuild && missingAssets.Count == 0;
+            EditorGUILayout.Space(2f);
+            using (new EditorGUILayout.HorizontalScope())
             {
-                using (new EditorGUILayout.HorizontalScope())
+                using (new EditorGUI.DisabledScope(!canGenerate))
                 {
-                    if (GUILayout.Button(new GUIContent("Generate New Room", "Make a new room and leave any others alone. With a room selected, the new one starts at its exit, so the two connect."), GUILayout.Height(ButtonHeight)))
+                    string tooltip = reason ?? "Make a new room with these values, at the New Room Placement in Room Setup. Other rooms are left alone.";
+                    if (GUILayout.Button(new GUIContent("Generate New Room", tooltip), GUILayout.Height(ButtonHeight)))
                     {
-                        Generate(selectedRoom != null ? selectedRoom.transform.position + selectedRoom.ExitOffset : newRoomPosition);
+                        Generate(NewRoomOrigin());
                     }
+                }
 
-                    using (new EditorGUI.DisabledScope(selectedRoom == null))
+                using (new EditorGUI.DisabledScope(Application.isPlaying || selectedRoom == null || !plan.CanBuild || missingAssets.Count > 0))
+                {
+                    if (GUILayout.Button(new GUIContent("Rebuild Room", "Build the selected room again from its values. This puts back generated pieces you changed or deleted by hand. Elements and objects you placed yourself stay."), GUILayout.Height(ButtonHeight)))
                     {
-                        if (GUILayout.Button(new GUIContent("Regenerate", "Rebuild the selected room now, which also replaces any generated pieces you changed by hand. Objects you placed yourself stay."), GUILayout.Height(ButtonHeight)))
-                        {
-                            RegenerateSelected();
-                        }
-
-                        if (GUILayout.Button(new GUIContent("Regenerate Layout", "Choose a new seed and rebuild the selected room."), GUILayout.Height(ButtonHeight)))
-                        {
-                            RandomiseSeed();
-                            RegenerateSelected();
-                        }
+                        RegenerateSelected();
                     }
                 }
             }
@@ -467,18 +483,34 @@ namespace TheSpaceBetween.EditorTools
             using (new EditorGUILayout.HorizontalScope())
             using (new EditorGUI.DisabledScope(Application.isPlaying || selectedRoom == null))
             {
-                if (GUILayout.Button(new GUIContent("Clear Generated Room", "Remove what the generator made for the selected room. Anything placed by hand stays. Changing a value or using Undo brings it back.")))
+                if (GUILayout.Button(new GUIContent("Clear Generated Pieces", "Remove the walls, lights and other pieces the generator made for the selected room. The room object, its Elements and anything you placed stay. Rebuild Room, changing a value or Undo brings the pieces back.")))
                 {
                     RoomBuilder.Clear(selectedRoom);
                 }
 
-                if (GUILayout.Button(new GUIContent("Keep Room", "Stop tracking the selected room. It stays as ordinary objects, and the generator will never touch it again.")))
+                if (GUILayout.Button(new GUIContent("Detach Room...", "Stop generating the selected room. It stays as ordinary objects you can edit freely, and the generator never changes it again.")))
                 {
-                    GeneratedRoom room = selectedRoom;
-                    selectedRoom = null;
-                    RoomBuilder.Keep(room);
+                    DetachSelected();
                 }
             }
+        }
+
+        private void DetachSelected()
+        {
+            GeneratedRoom room = selectedRoom;
+            bool confirmed = EditorUtility.DisplayDialog(
+                "Detach Room",
+                $"Detach '{room.name}'?\n\nIts objects stay in the scene, but it can no longer be rebuilt, cleared or changed from the Room Generator. Edit > Undo reverses this.",
+                "Detach",
+                "Cancel");
+            if (!confirmed)
+            {
+                return;
+            }
+
+            selectedRoom = null;
+            RoomBuilder.Keep(room);
+            GUIUtility.ExitGUI();
         }
 
         // Regenerating can remove a selected child, which would otherwise end the editing of this room.
@@ -490,7 +522,6 @@ namespace TheSpaceBetween.EditorTools
             RefreshPlan();
         }
 
-        // With a room selected, a new room starts at its exit, so the two connect.
         private void Generate(Vector3 position)
         {
             GeneratedRoom room = RoomBuilder.CreateRoom(settings.Clone(), position);
@@ -509,7 +540,7 @@ namespace TheSpaceBetween.EditorTools
                 return;
             }
 
-            Vector3 origin = newRoomPosition;
+            Vector3 origin = NewRoomOrigin();
             foreach (BlockPlan block in plan.Blocks)
             {
                 Handles.color = block.Group == RoomGroup.Gallery ? GalleryColor

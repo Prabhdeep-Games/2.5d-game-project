@@ -53,7 +53,7 @@ namespace TheSpaceBetween
         // The values the current contents were built from. When they differ from the values above, the room needs rebuilding.
         [SerializeField, HideInInspector] private string builtSignature = string.Empty;
 
-        [Tooltip("Whether Clear Generated Room has emptied this room. Changing a value builds it again.")]
+        [Tooltip("Whether Clear Generated Pieces has emptied this room. Rebuild Room, or changing a value, builds it again.")]
         [ReadOnly, SerializeField] private bool isCleared;
 
         //==================== DEBUG =====================

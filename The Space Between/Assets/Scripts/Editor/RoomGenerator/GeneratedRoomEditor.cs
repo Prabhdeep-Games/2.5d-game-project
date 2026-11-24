@@ -4,14 +4,16 @@ using UnityEngine;
 namespace TheSpaceBetween.EditorTools
 {
     /// <summary>
-    /// The GeneratedRoom Inspector: every value of the room, which rebuilds as it changes, the same route status and notes as
-    /// the Room Generator window, and the room's Elements, so a room can be built and filled without opening the window.
+    /// The GeneratedRoom Inspector: the room's values in the same sections as the Room Generator window (Room Setup,
+    /// Architecture, Elements, Lighting, and a closed Diagnostics section), rebuilding as they change, so a room can be
+    /// built and filled without opening the window.
     /// </summary>
     [CustomEditor(typeof(GeneratedRoom))]
     public sealed class GeneratedRoomEditor : Editor
     {
         private const string SettingsProperty = "settings";
         private const string ScriptProperty = "m_Script";
+        private const string SectionKey = "Inspector.";
         private const int MaximumRandomSeed = 100000;
 
         // Shared by every room's Inspector, so open categories stay open when another room is selected.
@@ -49,52 +51,81 @@ namespace TheSpaceBetween.EditorTools
         {
             var room = (GeneratedRoom)target;
             serializedObject.Update();
+            RefreshPlan(room);
 
             EditorGUILayout.HelpBox(
                 Application.isPlaying
                     ? "Changes rebuild this room straight away. Anything changed during Play is lost when Play stops."
-                    : "Changes rebuild this room straight away, replacing any generated pieces you changed by hand. Use Keep Room in the Room Generator to stop that. Changing Width or Exit Rise moves the exit, and rooms after it do not follow.",
-                MessageType.Info);
+                    : "Changes rebuild this room straight away, replacing generated pieces you changed by hand. To edit it freely, use Detach Room in the Room Generator window. Changing Width or Exit Rise moves the exit, and rooms after it do not follow.",
+                MessageType.None);
+            RoomGeneratorSections.DrawProblems(plan, routeProblem, null, " The room stays as it was until this is fixed.");
 
+            SerializedProperty settings = serializedObject.FindProperty(SettingsProperty);
+            if (RoomGeneratorSections.Section(SectionKey + "Setup", "Room Setup"))
+            {
+                EditValues(room, () => RoomGeneratorSections.DrawSetup(settings));
+            }
+
+            if (RoomGeneratorSections.Section(SectionKey + "Architecture", "Architecture"))
+            {
+                EditValues(room, () =>
+                {
+                    RoomGeneratorSections.DrawArchitecture(settings);
+                    return false;
+                });
+                RoomGeneratorSections.DrawNotes(plan);
+            }
+
+            if (RoomGeneratorSections.Section(SectionKey + "Elements", "Elements"))
+            {
+                ElementsPanel.Draw(room);
+            }
+
+            if (RoomGeneratorSections.Section(SectionKey + "Lighting", "Lighting"))
+            {
+                EditValues(room, () =>
+                {
+                    RoomGeneratorSections.DrawLighting(settings);
+                    RoomGeneratorSections.DrawLightingSummary(plan, room.Settings);
+                    RoomGeneratorSections.DrawSceneWideLighting(settings);
+                    return false;
+                });
+            }
+
+            if (RoomGeneratorSections.Section(SectionKey + "Diagnostics", "Diagnostics", false))
+            {
+                RoomGeneratorSections.DrawDiagnostics(plan, room.Settings, routeProblem);
+                EditorGUI.BeginChangeCheck();
+                DrawPropertiesExcluding(serializedObject, ScriptProperty, SettingsProperty);
+                serializedObject.ApplyModifiedProperties();
+                if (EditorGUI.EndChangeCheck())
+                {
+                    // Draw Gizmos is read by every gizmo inside the room, so the Scene view has to redraw them all.
+                    SceneView.RepaintAll();
+                }
+            }
+        }
+
+        // Draws some of the room's values. Any change, or New Seed, is applied and the room rebuilt.
+        private void EditValues(GeneratedRoom room, System.Func<bool> draw)
+        {
             EditorGUI.BeginChangeCheck();
-            DrawValues();
-            bool randomise = GUILayout.Button(new GUIContent("Randomise Seed", "Choose a new seed, which changes the room straight away."));
-            if (randomise)
+            bool newSeed = draw();
+            if (newSeed)
             {
                 serializedObject.FindProperty(SettingsProperty + ".seed").intValue = Random.Range(1, MaximumRandomSeed);
             }
 
-            if (EditorGUI.EndChangeCheck() || randomise)
+            if (EditorGUI.EndChangeCheck() || newSeed)
             {
                 RoomSettings before = room.Settings.Clone();
                 serializedObject.ApplyModifiedProperties();
                 FinishEdit(room, before);
                 serializedObject.Update();
             }
-
-            DrawStatus(room);
-
-            EditorGUILayout.Space();
-            ElementsPanel.Draw(room, RoomGeneratorWindow.IsPuzzleLevel());
-
-            EditorGUILayout.Space();
-            EditorGUI.BeginChangeCheck();
-            DrawPropertiesExcluding(serializedObject, ScriptProperty, SettingsProperty);
-            serializedObject.ApplyModifiedProperties();
-            if (EditorGUI.EndChangeCheck())
-            {
-                // Draw Gizmos is read by every gizmo inside the room, so the Scene view has to redraw them all.
-                SceneView.RepaintAll();
-            }
         }
 
-        // Options that belong to a switch, such as the fog values under Scene Fog, show only while it is on.
-        private void DrawValues()
-        {
-            ShowIfFields.DrawChildren(serializedObject.FindProperty(SettingsProperty), typeof(RoomSettings));
-        }
-
-        private void DrawStatus(GeneratedRoom room)
+        private void RefreshPlan(GeneratedRoom room)
         {
             string signature = room.CurrentSignature;
             if (plan == null || signature != planSignature)
@@ -102,32 +133,6 @@ namespace TheSpaceBetween.EditorTools
                 plan = RoomLayout.Create(room.Settings);
                 routeProblem = plan.CanBuild ? RoomRouteCheck.FindProblem(plan) : null;
                 planSignature = signature;
-            }
-
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Status", EditorStyles.boldLabel);
-            foreach (string error in plan.Errors)
-            {
-                EditorGUILayout.HelpBox(error + " The room stays as it was until this is fixed.", MessageType.Error);
-            }
-
-            if (!plan.CanBuild)
-            {
-                return;
-            }
-
-            if (routeProblem != null)
-            {
-                EditorGUILayout.HelpBox("Route: " + routeProblem, MessageType.Warning);
-            }
-            else
-            {
-                EditorGUILayout.LabelField("Route: floor and headroom are clear from entrance to exit.");
-            }
-
-            foreach (string note in plan.Notes)
-            {
-                EditorGUILayout.HelpBox(note, MessageType.Info);
             }
         }
     }
