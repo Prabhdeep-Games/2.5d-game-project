@@ -1,0 +1,647 @@
+using System.Collections;
+using System.Text;
+using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
+using UnityEngine.SceneManagement;
+using UnityEngine.TestTools;
+
+namespace TheSpaceBetween.Tests
+{
+    /// <summary>
+    /// Plays Final_Playtest, the level built from eight Room Generator rooms, with the real Player and the keyboard
+    /// (A/D move, Shift run, W jump, S slide, Space swaps toward the mouse pointer, E uses panels and observation points).
+    /// Each section is reached with its F key, so a failure points at one room. Positions are relative to each room's own
+    /// Room Reset entry, so they follow the rooms if the level is regenerated with the same values.
+    /// </summary>
+    public class FinalPlaytestTests : InputTestFixture
+    {
+        private const string SceneName = "Final_Playtest";
+        private const float StandingHeight = 1.08f;
+        private const int AimFrames = 3;
+        private const float SwapWaitLimitSeconds = 3f;
+
+        private Keyboard keyboard;
+        private Mouse mouse;
+        private GameObject player;
+        private PlaceholderPlayerController controller;
+        private SwapAbility ability;
+        private PlayerAnimationDriver animationDriver;
+        private PlaytestSession session;
+        private Camera view;
+        private RoomReset[] sections;
+        private TutorialGuide guide;
+        private readonly System.Collections.Generic.List<string> hintsSeen = new System.Collections.Generic.List<string>();
+
+        public override void Setup()
+        {
+            base.Setup();
+            InputSystem.settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
+            InputSystem.settings.editorInputBehaviorInPlayMode = InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+            keyboard = InputSystem.AddDevice<Keyboard>();
+            mouse = InputSystem.AddDevice<Mouse>();
+        }
+
+        [UnityTearDown]
+        public IEnumerator UnloadScene()
+        {
+            Time.timeScale = 1f;
+            Scene scene = SceneManager.GetSceneByName(SceneName);
+            if (!scene.isLoaded)
+            {
+                yield break;
+            }
+
+            SceneManager.SetActiveScene(SceneManager.CreateScene("Empty After Final Playtest"));
+            yield return SceneManager.UnloadSceneAsync(scene);
+        }
+
+        //==================== HELPERS =====================
+        private IEnumerator LoadScene()
+        {
+            yield return SceneManager.LoadSceneAsync(SceneName, LoadSceneMode.Single);
+            yield return null;
+            player = GameObject.Find("Player");
+            Assert.NotNull(player, $"{SceneName} needs a Player.");
+            controller = player.GetComponent<PlaceholderPlayerController>();
+            ability = player.GetComponent<SwapAbility>();
+            animationDriver = player.GetComponent<PlayerAnimationDriver>();
+            session = Object.FindAnyObjectByType<PlaytestSession>();
+            view = Camera.main;
+            guide = Object.FindAnyObjectByType<TutorialGuide>();
+            Assert.NotNull(guide, "The level needs its Tutorial Guide.");
+            hintsSeen.Clear();
+            // The session's sections are the rooms' Room Resets, in route order.
+            sections = Object.FindObjectsByType<RoomReset>(FindObjectsSortMode.None);
+            System.Array.Sort(sections, (a, b) => a.transform.position.x.CompareTo(b.transform.position.x));
+            Assert.AreEqual(8, sections.Length, "Every room should be a section.");
+            yield return WaitSeconds(0.5f);
+        }
+
+        private static T Find<T>(string name) where T : Component
+        {
+            GameObject found = GameObject.Find(name);
+            Assert.NotNull(found, $"The scene needs '{name}'.");
+            T component = found.GetComponent<T>();
+            Assert.NotNull(component, $"'{name}' needs a {typeof(T).Name}.");
+            return component;
+        }
+
+        private float X => player.transform.position.x;
+
+        private float Y => player.transform.position.y;
+
+        private Vector3 Entry(int section) => sections[section].transform.Find("Entry Point").position;
+
+        // Every wait notes the hint on screen, so a test can check which hints appeared and in what order.
+        private void NoteHint()
+        {
+            string current = guide != null ? guide.CurrentHint : null;
+            if (current != null && (hintsSeen.Count == 0 || hintsSeen[hintsSeen.Count - 1] != current))
+            {
+                hintsSeen.Add(current);
+            }
+        }
+
+        private string HintsSeen => string.Join(" > ", hintsSeen);
+
+        private IEnumerator WaitSeconds(float seconds)
+        {
+            float end = Time.time + seconds;
+            while (Time.time < end)
+            {
+                yield return null;
+                NoteHint();
+            }
+        }
+
+        private IEnumerator WaitUntil(System.Func<bool> condition, float limitSeconds)
+        {
+            float end = Time.time + limitSeconds;
+            while (!condition() && Time.time < end)
+            {
+                yield return null;
+                NoteHint();
+            }
+        }
+
+        // Presses whatever the swap is bound to on the keyboard or mouse, so the tests follow a change of binding.
+        private ButtonControl SwapButton()
+        {
+            foreach (InputBinding binding in ability.SwapAction.bindings)
+            {
+                if (binding.effectivePath == "<Mouse>/leftButton")
+                {
+                    return mouse.leftButton;
+                }
+
+                if (binding.effectivePath.StartsWith("<Keyboard>/"))
+                {
+                    return (ButtonControl)keyboard[binding.effectivePath.Substring("<Keyboard>/".Length)];
+                }
+            }
+
+            Assert.Fail("The swap has no keyboard or mouse binding.");
+            return null;
+        }
+
+        private void AssertHintSeenAndCleared(string hint)
+        {
+            Assert.Contains(hint, hintsSeen, $"The '{hint}' hint should have shown. Seen: {HintsSeen}");
+            Assert.AreNotEqual(hint, guide.CurrentHint, $"The '{hint}' hint should be gone once it is done. Seen: {HintsSeen}");
+        }
+
+        private IEnumerator Tap(ButtonControl key)
+        {
+            Press(key);
+            yield return null;
+            Release(key);
+            yield return null;
+        }
+
+        private IEnumerator HoldRun()
+        {
+            Press(keyboard.dKey);
+            yield return null;
+            Press(keyboard.leftShiftKey);
+            yield return null;
+        }
+
+        private IEnumerator ReleaseAll()
+        {
+            Release(keyboard.leftShiftKey);
+            yield return null;
+            Release(keyboard.dKey);
+            yield return null;
+            Release(keyboard.aKey);
+            yield return null;
+        }
+
+        private IEnumerator Turn(KeyControl from, KeyControl to)
+        {
+            Release(from);
+            yield return null;
+            Press(to);
+            yield return null;
+        }
+
+        private IEnumerator WalkTo(float x, bool run = false)
+        {
+            Press(keyboard.dKey);
+            yield return null;
+            if (run)
+            {
+                Press(keyboard.leftShiftKey);
+                yield return null;
+            }
+
+            yield return WaitUntil(() => X >= x, 8f);
+            yield return ReleaseAll();
+            yield return WaitSeconds(0.3f);
+        }
+
+        private IEnumerator AimAndSwap(Swappable target)
+        {
+            for (int i = 0; i < AimFrames; i++)
+            {
+                Set(mouse.position, (Vector2)view.WorldToScreenPoint(target.Center));
+                yield return null;
+            }
+
+            yield return Tap(SwapButton());
+            float start = Time.realtimeSinceStartup;
+            while (ability.IsGesturing && Time.realtimeSinceStartup - start < SwapWaitLimitSeconds)
+            {
+                yield return null;
+            }
+
+            while (ability.IsSwapping && Time.realtimeSinceStartup - start < SwapWaitLimitSeconds)
+            {
+                yield return null;
+            }
+        }
+
+        // F1 to F8 put the player at a room's entry.
+        private IEnumerator GoToSection(int index)
+        {
+            ButtonControl[] keys =
+            {
+                keyboard.f1Key, keyboard.f2Key, keyboard.f3Key, keyboard.f4Key,
+                keyboard.f5Key, keyboard.f6Key, keyboard.f7Key, keyboard.f8Key
+            };
+            yield return Tap(keys[index]);
+            yield return WaitSeconds(0.5f);
+            Assert.AreEqual(Entry(index).x, X, 0.4f, $"F{index + 1} should reach room {index + 1}.");
+        }
+
+        private bool StandingAbove(float floorY) => controller.IsGrounded && Y > floorY + StandingHeight - 0.2f;
+
+        //==================== EACH ROOM =====================
+        [UnityTest]
+        public IEnumerator Room1_Arrival_JumpTheBarriers_AndThePanelOpensTheDoor()
+        {
+            yield return LoadScene();
+            float x0 = Entry(0).x;
+            AccessDoor door = sections[0].GetComponentInParent<GeneratedRoom>().GetComponentInChildren<AccessDoor>();
+            ControlPanel panel = sections[0].GetComponentInParent<GeneratedRoom>().GetComponentInChildren<ControlPanel>();
+            yield return HoldRun();
+            foreach (float barrier in new[] { 12f, 20f })
+            {
+                yield return WaitUntil(() => X >= x0 - 2.5f + barrier - 2.2f, 4f);
+                yield return Tap(keyboard.wKey);
+            }
+
+            yield return WaitUntil(() => X >= panel.transform.position.x - 0.5f, 5f);
+            yield return ReleaseAll();
+            yield return WaitSeconds(0.5f);
+            Assert.Less(X, door.transform.position.x, "The closed door should stop the player.");
+            Assert.IsTrue(panel.PlayerInReach, $"The panel should be in reach. At {player.transform.position}");
+            yield return Tap(keyboard.eKey);
+            yield return WaitUntil(() => door.State == AccessDoor.DoorState.Open, 3f);
+            Assert.AreEqual(AccessDoor.DoorState.Open, door.State, "E should open the door.");
+            yield return WalkTo(door.transform.position.x + 2f, true);
+            Assert.Greater(X, door.transform.position.x, "The player should pass the door.");
+            AssertHintSeenAndCleared("Barrier");
+            Assert.Pass($"through the door at x {X:F1}");
+        }
+
+        [UnityTest]
+        public IEnumerator Room2_Observation_ObserveThenSwapThroughTheGlass()
+        {
+            yield return LoadScene();
+            yield return GoToSection(1);
+            ObservationPoint point = Find<ObservationPoint>("Observation Point");
+            yield return WalkTo(point.transform.position.x + 0.5f);
+            yield return Tap(keyboard.eKey);
+            yield return WaitSeconds(1.2f);
+            Assert.IsTrue(point.IsObserving, $"E should start observing. At {player.transform.position}");
+            yield return Tap(keyboard.eKey);
+            yield return WaitSeconds(1f);
+            Assert.IsFalse(point.IsObserving, "E again should return.");
+
+            Swappable housing = Find<Swappable>("Swap Housing (behind glass)");
+            float glassX = sections[1].GetComponentInParent<GeneratedRoom>().transform.position.x + 24f;
+            yield return WalkTo(glassX - 1.4f);
+            Assert.Less(X, glassX, "The glass should stop the player.");
+            yield return AimAndSwap(housing);
+            Assert.AreEqual(SwapRejection.None, ability.LastResult, $"The housing should be in range. At {player.transform.position}");
+            Assert.Greater(X, glassX, "The swap should cross the glass.");
+            AssertHintSeenAndCleared("Glass");
+            Assert.Pass($"observed, then swapped to x {X:F1}");
+        }
+
+        [UnityTest]
+        public IEnumerator Room3_WallRun_UpTheCurve_OntoTheLedge()
+        {
+            yield return LoadScene();
+            yield return GoToSection(2);
+            float floor = Entry(2).y - StandingHeight;
+            bool ran = false;
+            yield return HoldRun();
+            float end = Time.time + 8f;
+            while (Time.time < end && !(StandingAbove(floor + 12f) && X > Entry(3).x - 6f))
+            {
+                ran |= controller.IsWallRunning;
+                yield return null;
+            }
+
+            yield return ReleaseAll();
+            Assert.IsTrue(ran, "The curve should start a wall run.");
+            Assert.IsTrue(StandingAbove(floor + 12f), $"The wall run should end on the ledge 12 up. At {player.transform.position}");
+            AssertHintSeenAndCleared("Wall run");
+            Assert.Pass($"on the ledge at {player.transform.position}");
+        }
+
+        [UnityTest]
+        public IEnumerator Room4_WallJumpShaft_WallJumpsOutOfThePit()
+        {
+            yield return LoadScene();
+            yield return GoToSection(3);
+            GeneratedRoom room = sections[3].GetComponentInParent<GeneratedRoom>();
+            float roomX = room.transform.position.x;
+            float floor = room.transform.position.y;
+            float center = roomX + (25.8f + 33f) * 0.5f;
+            float pitFloor = floor - 14f;
+            yield return HoldRun();
+            yield return WaitUntil(() => controller.IsWallRunning && X > center, 6f);
+            Assert.IsTrue(controller.IsWallRunning && X > center, $"The player should run up the far wall. At {player.transform.position}");
+            yield return WaitUntil(() => Y > pitFloor + 8f, 2f);
+            yield return Tap(keyboard.wKey);
+            yield return Turn(keyboard.dKey, keyboard.aKey);
+            yield return WaitUntil(() => controller.IsWallRunning && X < center, 1.5f);
+            Assert.IsTrue(controller.IsWallRunning && X < center, $"The wall jump should reach the near wall. At {player.transform.position}");
+            yield return WaitUntil(() => Y > pitFloor + 12.2f, 1.5f);
+            yield return Tap(keyboard.wKey);
+            yield return Turn(keyboard.aKey, keyboard.dKey);
+            yield return WaitUntil(() => StandingAbove(floor + 4f) && X > center + 4f, 4f);
+            yield return ReleaseAll();
+            Assert.IsTrue(StandingAbove(floor + 4f), $"The climb should end on the exit floor 4 up. At {player.transform.position}");
+            AssertHintSeenAndCleared("Wall jump");
+            Assert.Pass($"out of the shaft at {player.transform.position}");
+        }
+
+        [UnityTest]
+        public IEnumerator Room5_WatchedCorridor_SwapPastTheCamera_AndThePanelOpensTheDoor()
+        {
+            yield return LoadScene();
+            yield return GoToSection(4);
+            GeneratedRoom room = sections[4].GetComponentInParent<GeneratedRoom>();
+            SecurityCamera securityCamera = room.GetComponentInChildren<SecurityCamera>();
+            AccessDoor door = room.GetComponentInChildren<AccessDoor>();
+            ControlPanel panel = room.GetComponentInChildren<ControlPanel>();
+            Swappable crate = Find<Swappable>("Swap Crate (past the camera)");
+            float cameraX = securityCamera.transform.position.x;
+
+            yield return WalkTo(crate.Position.x - 7.5f);
+            Assert.IsFalse(securityCamera.IsAlarmed, $"The camera should not see the player yet. At {player.transform.position}");
+            yield return AimAndSwap(crate);
+            Assert.AreEqual(SwapRejection.None, ability.LastResult, $"The crate should be in range. At {player.transform.position}");
+            Assert.Greater(X, cameraX, "The swap should cross the camera's light.");
+            yield return WaitSeconds(0.4f);
+            Assert.IsFalse(securityCamera.IsAlarmed, $"The swap should pass unseen. At {player.transform.position}");
+
+            yield return WalkTo(panel.transform.position.x - 0.5f);
+            yield return Tap(keyboard.eKey);
+            yield return WaitUntil(() => door.State == AccessDoor.DoorState.Open, 3f);
+            Assert.AreEqual(AccessDoor.DoorState.Open, door.State, "E should open the door when unseen.");
+            yield return WalkTo(door.transform.position.x + 2f);
+            Assert.Greater(X, door.transform.position.x, "The player should pass the door.");
+            AssertHintSeenAndCleared("Camera");
+            Assert.Pass($"through at x {X:F1}");
+        }
+
+        [UnityTest]
+        public IEnumerator Room5_WalkingIntoTheLight_SealsTheExit()
+        {
+            yield return LoadScene();
+            yield return GoToSection(4);
+            GeneratedRoom room = sections[4].GetComponentInParent<GeneratedRoom>();
+            SecurityCamera securityCamera = room.GetComponentInChildren<SecurityCamera>();
+            Press(keyboard.dKey);
+            yield return WaitUntil(() => securityCamera.IsAlarmed, 4f);
+            Release(keyboard.dKey);
+            Assert.IsTrue(securityCamera.IsAlarmed, $"The camera should see a player walking under it. At {player.transform.position}");
+            yield return WaitSeconds(0.3f);
+            Assert.AreEqual("Seen", guide.CurrentHint, $"Being seen shows what to do. Seen: {HintsSeen}");
+            Assert.Pass($"seen at x {X:F1}, camera at {securityCamera.transform.position.x:F1}; hints {HintsSeen}");
+        }
+
+        [UnityTest]
+        public IEnumerator Room6_PressurePuzzle_TheCrateHoldsTheDoorOpen()
+        {
+            yield return LoadScene();
+            yield return GoToSection(5);
+            GeneratedRoom room = sections[5].GetComponentInParent<GeneratedRoom>();
+            AccessDoor door = room.GetComponentInChildren<AccessDoor>();
+            ControlPanel pad = Find<ControlPanel>("Pressure Pad (exit door)");
+            Swappable crate = Find<Swappable>("Swap Crate (behind glass)");
+            Assert.AreEqual(AccessDoor.DoorState.Closed, door.State, "The exit starts sealed.");
+            yield return WalkTo(pad.transform.position.x - 0.1f);
+            yield return WaitSeconds(0.6f);
+            Assert.IsTrue(pad.IsOccupied, $"The player should stand on the pad. At {player.transform.position}");
+            yield return AimAndSwap(crate);
+            Assert.AreEqual(SwapRejection.None, ability.LastResult, $"The crate should be in range from the pad. At {player.transform.position}");
+            yield return WaitSeconds(1f);
+            Assert.IsTrue(pad.IsOccupied, "The crate should now weigh the pad down.");
+            yield return WaitUntil(() => door.State == AccessDoor.DoorState.Open, 3f);
+            Assert.AreEqual(AccessDoor.DoorState.Open, door.State, "The crate on the pad should hold the door open.");
+            yield return WalkTo(door.transform.position.x + 2f);
+            Assert.Greater(X, door.transform.position.x, "The player should pass the door.");
+            AssertHintSeenAndCleared("Pressure pad");
+            Assert.Pass($"through at x {X:F1}");
+        }
+
+        [UnityTest]
+        public IEnumerator Room7_ChaseRun_CrumblingBridgesAndTheSlide()
+        {
+            yield return LoadScene();
+            yield return GoToSection(6);
+            GeneratedRoom room = sections[6].GetComponentInParent<GeneratedRoom>();
+            float roomX = room.transform.position.x;
+            float floor = room.transform.position.y;
+            float exitX = roomX + 48f;
+            var report = new StringBuilder();
+            bool slid = false;
+            bool through = false;
+            for (int attempt = 1; attempt <= 3 && !through; attempt++)
+            {
+                yield return HoldRun();
+                yield return WaitUntil(() => X >= roomX + 20.5f, 5f);
+                yield return Tap(keyboard.sKey);
+                float end = Time.time + 6f;
+                while (Time.time < end && X < exitX + 1f && X > roomX + 1f && Y > floor - 1f)
+                {
+                    slid |= controller.IsSliding;
+                    yield return null;
+                }
+
+                yield return ReleaseAll();
+                through = X >= exitX + 1f;
+                report.Append($"attempt {attempt}: reached x {X:F1}; ");
+                if (!through)
+                {
+                    yield return WaitSeconds(1f);
+                    yield return GoToSection(6);
+                }
+            }
+
+            Assert.IsTrue(slid, "The hood should need a slide. " + report);
+            Assert.IsTrue(through, "The chase room should be crossable. " + report);
+            Assert.Less(hintsSeen.IndexOf("Failing floor"), hintsSeen.LastIndexOf("Slide"), $"The floor hint comes first, then the slide near the hood. Seen: {HintsSeen}");
+            AssertHintSeenAndCleared("Slide");
+            AssertHintSeenAndCleared("Failing floor");
+            Assert.Pass(report.ToString());
+        }
+
+        [UnityTest]
+        public IEnumerator Room8_Finale_SwapOverTheGap_RideTheShuttle_AndTheElevatorToTheGoal()
+        {
+            yield return LoadScene();
+            yield return GoToSection(7);
+            GeneratedRoom room = sections[7].GetComponentInParent<GeneratedRoom>();
+            float roomX = room.transform.position.x;
+            float floor = room.transform.position.y;
+            Swappable beacon = Find<Swappable>("Swap Beacon (over the gap)");
+            MovingPlatform shuttle = Find<MovingPlatform>("Moving Platform (over the gap)");
+            MovingPlatform lift = Find<MovingPlatform>("Elevator");
+            LevelGoal goal = Object.FindAnyObjectByType<LevelGoal>();
+            var report = new StringBuilder();
+
+            // Gap 1, with glass over it: jump, swap to the beacon in the air, land beyond.
+            float gapStart = roomX + 16.5f;
+            float gapEnd = roomX + 23f;
+            // The hall's low barrier first.
+            yield return HoldRun();
+            yield return WaitUntil(() => X >= roomX + 7f - 2.2f, 3f);
+            yield return Tap(keyboard.wKey);
+            yield return WaitUntil(() => X >= gapStart - 1.2f, 5f);
+            yield return Tap(keyboard.wKey);
+            yield return WaitSeconds(0.15f);
+            yield return AimAndSwap(beacon);
+            Assert.AreEqual(SwapRejection.None, ability.LastResult, $"The beacon should be in range mid-jump. At {player.transform.position}");
+            yield return WaitUntil(() => controller.IsGrounded, 2f);
+            Assert.IsTrue(StandingAbove(floor) && X > gapEnd, $"The swap should carry the player over the gap. At {player.transform.position}");
+            yield return ReleaseAll();
+            report.Append($"over gap 1 to x {X:F1}; ");
+
+            // Gap 2: wait for the shuttle at the near side, ride it, step off.
+            float gap2Start = roomX + 36f;
+            yield return WalkTo(gap2Start - 1f);
+            yield return WaitUntil(() => shuttle.Progress <= 0.01f, 8f);
+            yield return WalkTo(gap2Start + 1.2f);
+            Assert.IsTrue(controller.IsGrounded && Y > floor, $"The player should stand on the shuttle. At {player.transform.position}");
+            yield return WaitUntil(() => shuttle.Progress >= 0.99f, 8f);
+            yield return WalkTo(roomX + 43.3f);
+            Assert.IsTrue(StandingAbove(floor), $"The shuttle should carry the player across. At {player.transform.position}");
+            report.Append($"shuttle to x {X:F1}; ");
+
+            // The elevator: stand on its pad, ride up, step onto the ledge and into the goal.
+            yield return WalkTo(lift.transform.position.x - 0.2f);
+            yield return WaitUntil(() => lift.Progress >= 1f, 8f);
+            Assert.GreaterOrEqual(lift.Progress, 1f, $"The pad should raise the elevator. At {player.transform.position}");
+            yield return WalkTo(goal.transform.position.x);
+            yield return WaitUntil(() => goal.Reached, 3f);
+            Assert.IsTrue(goal.Reached, $"The ledge should hold the goal. At {player.transform.position}");
+            yield return WaitSeconds(0.6f);
+            AssertHintSeenAndCleared("Mid-air swap");
+            AssertHintSeenAndCleared("Elevator");
+            Assert.IsTrue(guide.EndVisible, "The closing line shows at the goal.");
+            Assert.IsNull(guide.CurrentHintText, "No hint stays up at the goal.");
+            report.Append($"goal at {player.transform.position}");
+            Assert.Pass(report.ToString());
+        }
+
+        //==================== TUTORIAL GUIDANCE =====================
+        private static string Readable(string path)
+        {
+            switch (path)
+            {
+                case "<Mouse>/leftButton":
+                    return "Left click";
+                case "<Keyboard>/space":
+                    return "Space";
+                case "<Keyboard>/#(W)":
+                case "<Keyboard>/w":
+                    return "W";
+                default:
+                    return null;
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator Tutorial_ControlsShowTheRealBindings_ForKeyboardAndGamepad()
+        {
+            yield return LoadScene();
+            Assert.IsTrue(guide.ControlsVisible, "The controls show at the start.");
+            string kb(string token) => guide.KeyLabel(token, TutorialGuide.InputDevice.KeyboardMouse);
+            string pad(string token) => guide.KeyLabel(token, TutorialGuide.InputDevice.Gamepad);
+
+            Assert.AreEqual("A / D", kb("Move"));
+            Assert.AreEqual("W", kb("Jump"));
+            Assert.AreEqual("Left Shift", kb("Run"));
+            Assert.AreEqual("S", kb("Slide"));
+            Assert.AreEqual("E", kb("Use"));
+            Assert.AreEqual("R", kb("Restart"));
+            Assert.AreEqual("Mouse", kb("Aim"));
+            string swapPath = null;
+            foreach (InputBinding binding in ability.SwapAction.bindings)
+            {
+                if (binding.effectivePath.StartsWith("<Keyboard>") || binding.effectivePath.StartsWith("<Mouse>"))
+                {
+                    swapPath = binding.effectivePath;
+                    break;
+                }
+            }
+
+            Assert.AreEqual(Readable(swapPath), kb("Swap"), $"The swap label follows its binding, {swapPath}.");
+
+            Assert.AreEqual("Left stick", pad("Move"));
+            Assert.AreEqual("A / Cross", pad("Jump"));
+            Assert.AreEqual("L3 (left stick press)", pad("Run"));
+            Assert.AreEqual("not set", pad("Slide"), "Slide has no gamepad binding yet, and the overview says so.");
+            Assert.AreEqual("X / Square", pad("Swap"));
+            Assert.AreEqual("Right stick", pad("Aim"));
+            Assert.AreEqual("X / Square", pad("Use"));
+            Assert.AreEqual("View / Select", pad("Restart"));
+
+            string table = guide.ControlsText;
+            StringAssert.Contains("W | A / Cross | Jump", table);
+            StringAssert.Contains("S | not set | Slide while running", table);
+            Assert.Pass(table);
+        }
+
+        [UnityTest]
+        public IEnumerator Tutorial_OpensWithTheObjective_ThenTheFirstHint_AndTheControlsLeaveAfterTheFirstRoom()
+        {
+            yield return LoadScene();
+            Assert.AreEqual("Intro", guide.CurrentHint, "The objective comes first.");
+            yield return WaitSeconds(0.5f);
+            StringAssert.Contains("Reach the end of the facility", guide.CurrentHintText);
+            yield return WaitSeconds(7f);
+            Assert.IsNull(guide.CurrentHint, "The opening line leaves, and nothing else shows before the barrier.");
+
+            yield return HoldRun();
+            yield return WaitUntil(() => guide.CurrentHint == "Barrier", 3f);
+            Assert.AreEqual("Barrier", guide.CurrentHint, $"Approaching the barrier shows its hint. At {player.transform.position}");
+            yield return WaitSeconds(0.4f);
+            StringAssert.Contains("W jumps over it", guide.CurrentHintText);
+            yield return ReleaseAll();
+            Assert.IsTrue(guide.ControlsVisible, "The controls stay through the first room.");
+
+            yield return GoToSection(1);
+            yield return WaitSeconds(0.5f);
+            Assert.IsFalse(guide.ControlsVisible, "Past the first room the controls leave.");
+            Assert.Pass(HintsSeen);
+        }
+
+        [UnityTest]
+        public IEnumerator Tutorial_RestartingARoom_BringsItsHintBack_AndLeavesNothingStale()
+        {
+            yield return LoadScene();
+            yield return GoToSection(1);
+            Swappable housing = Find<Swappable>("Swap Housing (behind glass)");
+            float glassX = sections[1].GetComponentInParent<GeneratedRoom>().transform.position.x + 24f;
+            yield return WalkTo(glassX - 1.4f);
+            yield return WaitUntil(() => guide.CurrentHint == "Glass", 6f);
+            Assert.AreEqual("Glass", guide.CurrentHint, "Near the glass, its hint shows.");
+            yield return AimAndSwap(housing);
+            Assert.Greater(X, glassX, "Swapped through.");
+            yield return WaitSeconds(0.5f);
+            Assert.AreNotEqual("Glass", guide.CurrentHint, "Done once through.");
+
+            yield return Tap(keyboard.rKey);
+            yield return WaitSeconds(0.5f);
+            Assert.AreNotEqual("Glass", guide.CurrentHint, "Back at the entry, far from the glass, nothing stale stays.");
+            yield return WalkTo(glassX - 1.4f);
+            yield return WaitUntil(() => guide.CurrentHint == "Glass", 3f);
+            Assert.AreEqual("Glass", guide.CurrentHint, "After the restart the room teaches again.");
+            Assert.Pass(HintsSeen);
+        }
+
+        [UnityTest]
+        public IEnumerator Tutorial_PanelsStayOnScreen_AndOffThePlayer()
+        {
+            yield return LoadScene();
+            yield return WaitSeconds(0.6f);
+            var report = new StringBuilder($"screen {Screen.width}x{Screen.height}; ");
+            Vector3 playerOnScreen = view.WorldToScreenPoint(player.transform.position);
+            foreach (string panelName in new[] { "Hint", "Controls" })
+            {
+                var panel = (RectTransform)guide.transform.Find("Tutorial UI/" + panelName);
+                Assert.NotNull(panel, panelName);
+                var corners = new Vector3[4];
+                panel.GetWorldCorners(corners);
+                var rect = new Rect(corners[0], corners[2] - corners[0]);
+                report.Append($"{panelName} {rect}; ");
+                Assert.GreaterOrEqual(rect.xMin, -0.5f, panelName + " stays on screen. " + report);
+                Assert.LessOrEqual(rect.xMax, Screen.width + 0.5f, panelName + " stays on screen. " + report);
+                Assert.LessOrEqual(rect.yMax, Screen.height + 0.5f, panelName + " stays on screen. " + report);
+                Assert.IsFalse(rect.Contains(playerOnScreen), $"{panelName} must not cover the player at {playerOnScreen}. " + report);
+                Assert.Less(rect.height, Screen.height * 0.6f, panelName + " stays compact. " + report);
+            }
+
+            Assert.Pass(report.ToString());
+        }
+    }
+}

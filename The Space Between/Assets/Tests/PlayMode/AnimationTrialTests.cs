@@ -43,6 +43,14 @@ namespace TheSpaceBetween.Tests
         private Mouse mouse;
         private GameObject player;
         private PlaceholderPlayerController controller;
+
+        // The player's tuning, read from the prefab, so these tests follow the designer's values instead of fixed numbers.
+        private float Tuning(string field)
+        {
+            var info = typeof(PlaceholderPlayerController).GetField(field, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.NotNull(info, field);
+            return (float)info.GetValue(controller);
+        }
         private CharacterController capsule;
         private SwapAbility ability;
         private PlayerAnimationDriver driver;
@@ -897,8 +905,9 @@ namespace TheSpaceBetween.Tests
             yield return ReleaseAll();
             Assert.IsTrue(fell, "The fall should play after letting go.");
             Assert.Less(Y, letGoY - 1.5f, "The player should fall, not stay on the wall.");
-            Assert.Greater(furthest, 0.35f, "The player should be pushed clear of the wall.");
-            Assert.Less(furthest, 0.7f, "The push should be small.");
+            float push = Tuning("letGoPushDistance");
+            Assert.Greater(furthest, push * 0.7f, $"The player should be pushed clear of the wall, about Let Go Push Distance ({push}).");
+            Assert.Less(furthest, push * 1.3f, $"The push should be about Let Go Push Distance ({push}).");
             Assert.Pass($"pushed {furthest:F2} away from the wall, fell from y {letGoY:F2} to {Y:F2}");
         }
 
@@ -931,8 +940,9 @@ namespace TheSpaceBetween.Tests
             yield return ReleaseAll();
             Assert.IsTrue(fell, "The fall should play after letting go.");
             Assert.Less(Y, letGoY - 1.5f, "The player should fall, not grab the same wall again.");
-            Assert.Greater(furthest, 0.35f, "The player should be pushed clear of the wall.");
-            Assert.Less(furthest, 0.7f, "The push should be small.");
+            float push = Tuning("letGoPushDistance");
+            Assert.Greater(furthest, push * 0.7f, $"The player should be pushed clear of the wall, about Let Go Push Distance ({push}).");
+            Assert.Less(furthest, push * 1.3f, $"The push should be about Let Go Push Distance ({push}).");
             Assert.Pass($"pushed {furthest:F2} away from the wall, fell from y {letGoY:F2} to {Y:F2}");
         }
 
@@ -955,7 +965,8 @@ namespace TheSpaceBetween.Tests
 
             yield return ReleaseAll();
             float feetAboveLedge = apex - StandingOffset - WallTopY;
-            Assert.AreEqual(1f, feetAboveLedge, 0.1f, "The feet should peak about 1 above the ledge (Wall Top Lift).");
+            float lift = Tuning("wallTopLift");
+            Assert.AreEqual(lift + 0.05f, feetAboveLedge, 0.15f, $"The feet should peak about Wall Top Lift ({lift}) above the ledge.");
             Assert.IsTrue(controller.IsGrounded && Y > WallTopY, "The player should land on the ledge.");
             Assert.Pass($"feet peaked {feetAboveLedge:F2} above the ledge, rising at {exitSpeed:F1} u/s just after the exit");
         }

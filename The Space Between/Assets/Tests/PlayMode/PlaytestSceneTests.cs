@@ -11,7 +11,8 @@ using UnityEngine.TestTools;
 namespace TheSpaceBetween.Tests
 {
     /// <summary>
-    /// Plays Playtest_Full with the real Player, using the keyboard and the mouse as a participant would, and checks that
+    /// Plays Playtest_Full with the real Player, using the keyboard and the mouse as a participant would (W jumps, Space
+    /// swaps toward the mouse pointer, Shift runs), and checks that
     /// a session can be finished, recovered from and started again. Each test reports its measurements in the pass message.
     /// Whether new players understand the route is not something a test can answer.
     /// The positions below match the scene layout, so moving geometry means updating them here.
@@ -38,7 +39,7 @@ namespace TheSpaceBetween.Tests
         private const float SecondJumpHeight = 12.2f;
 
         // Scene layout, from left to right.
-        private const float StartX = -106f;
+        private const float StartX = -105.9f;
         private const float Barrier1X = -99.3f;
         private const float LedgeAStart = -82f;
         private const float LedgeATop = 14f;
@@ -102,6 +103,10 @@ namespace TheSpaceBetween.Tests
         private AccessDoor doorC;
         private Camera view;
 
+        // Where the scene puts the player when it loads. The designer moves it while trying sections, so the tests read
+        // it instead of assuming the route's start, and F1 takes the route test to the real start.
+        private Vector3 sceneStart;
+
         private readonly HashSet<string> statesSeen = new HashSet<string>();
         private float closestToScreenEdge;
         private Vector3 closestAt;
@@ -141,6 +146,33 @@ namespace TheSpaceBetween.Tests
             yield return SceneManager.LoadSceneAsync(SceneName, LoadSceneMode.Single);
             yield return null;
             FindSceneObjects();
+            yield return WaitForLanding();
+            sceneStart = player.transform.position;
+        }
+
+        // The start position is above the floor, so the player drops onto it first, and a drop past Hard Landing Height
+        // ends in the landing roll, which carries the player on. Real time, in case game time is held.
+        private IEnumerator WaitForLanding()
+        {
+            float start = Time.realtimeSinceStartup;
+            while (!controller.IsGrounded && Time.realtimeSinceStartup - start < 3f)
+            {
+                yield return null;
+            }
+
+            // The Animator enters the roll a few frames after touching down.
+            float settle = Time.realtimeSinceStartup + 0.3f;
+            while (animationDriver.CurrentState != "Roll" && Time.realtimeSinceStartup < settle)
+            {
+                yield return null;
+            }
+
+            while (animationDriver.CurrentState == "Roll" && Time.realtimeSinceStartup - start < 6f)
+            {
+                yield return null;
+            }
+
+            yield return null;
         }
 
         private static T Find<T>(string name) where T : Component
@@ -269,7 +301,7 @@ namespace TheSpaceBetween.Tests
             yield return null;
         }
 
-        private IEnumerator AimAndClick(Swappable target)
+        private IEnumerator AimAndSwap(Swappable target)
         {
             for (int i = 0; i < AimFrames; i++)
             {
@@ -277,10 +309,15 @@ namespace TheSpaceBetween.Tests
                 yield return null;
             }
 
-            yield return Tap(mouse.leftButton);
+            yield return Tap(keyboard.spaceKey);
 
-            // Game time stops during a smooth swap, so this waits in real time.
+            // Game time stops during a smooth swap, so this waits in real time. The swap itself starts after the arm gesture.
             float start = Time.realtimeSinceStartup;
+            while (ability.IsGesturing && Time.realtimeSinceStartup - start < SwapWaitLimitSeconds)
+            {
+                yield return null;
+            }
+
             while (ability.IsSwapping && Time.realtimeSinceStartup - start < SwapWaitLimitSeconds)
             {
                 yield return null;
@@ -334,7 +371,7 @@ namespace TheSpaceBetween.Tests
         {
             yield return HoldRun(keyboard.dKey);
             yield return WaitUntil(() => X >= Barrier1X - 2.2f, 4f);
-            yield return Tap(keyboard.spaceKey);
+            yield return Tap(keyboard.wKey);
             yield return WaitUntil(() => StandingOn(LedgeATop) && X > LedgeAStart + 0.5f, 5f);
             Assert.IsTrue(StandingOn(LedgeATop), $"The curve should lead onto the ledge. At {player.transform.position}");
         }
@@ -359,12 +396,12 @@ namespace TheSpaceBetween.Tests
             yield return WaitUntil(() => controller.IsWallRunning && X > center, 4f);
             Assert.IsTrue(controller.IsWallRunning && X > center, $"The player should run up the far wall. At {player.transform.position}");
             yield return WaitUntil(() => Y > floor + FirstJumpHeight, 2f);
-            yield return Tap(keyboard.spaceKey);
+            yield return Tap(keyboard.wKey);
             yield return Turn(keyboard.dKey, keyboard.aKey);
             yield return WaitUntil(() => controller.IsWallRunning && X < center, 1.5f);
             Assert.IsTrue(controller.IsWallRunning && X < center, $"The wall jump should reach the near wall. At {player.transform.position}");
             yield return WaitUntil(() => Y > floor + SecondJumpHeight, 1.5f);
-            yield return Tap(keyboard.spaceKey);
+            yield return Tap(keyboard.wKey);
             yield return Turn(keyboard.aKey, keyboard.dKey);
 
             // A strong jump can also clear the far wall's top outright, which gets through just the same.
@@ -401,7 +438,7 @@ namespace TheSpaceBetween.Tests
             yield return WaitUntil(() => X > BesideGlassX - 0.5f, 3f);
             yield return ReleaseAll();
             yield return WaitSeconds(0.5f);
-            yield return AimAndClick(housing);
+            yield return AimAndSwap(housing);
             Assert.AreEqual(SwapRejection.None, ability.LastResult, $"The housing behind the glass should be in range. At {player.transform.position}");
             Assert.Greater(X, GlassX, "The swap should put the player beyond the glass.");
             yield return WaitSeconds(0.5f);
@@ -417,7 +454,7 @@ namespace TheSpaceBetween.Tests
             yield return ReleaseAll();
             yield return WaitSeconds(0.6f);
             Assert.AreEqual(AccessDoor.DoorState.Open, doorB.State, $"Standing on the pad should open the door. At {player.transform.position}");
-            yield return AimAndClick(housing2);
+            yield return AimAndSwap(housing2);
             Assert.AreEqual(SwapRejection.None, ability.LastResult, $"The second housing should be in range from the pad. At {player.transform.position}");
             Assert.Greater(X, Glass2X, "The swap should cross the second glass.");
             yield return WaitSeconds(0.8f);
@@ -436,7 +473,7 @@ namespace TheSpaceBetween.Tests
             yield return ReleaseAll();
             yield return WaitSeconds(0.5f);
             Assert.IsFalse(securityCamera.IsAlarmed, $"The edge of the light should be safe. At {player.transform.position}");
-            yield return AimAndClick(crate);
+            yield return AimAndSwap(crate);
             Assert.AreEqual(SwapRejection.None, ability.LastResult, $"The crate should be in range across the light. At {player.transform.position}");
             Assert.Greater(X, CameraX, "The swap should cross the light.");
             yield return WaitSeconds(0.4f);
@@ -456,9 +493,9 @@ namespace TheSpaceBetween.Tests
             yield return WaitSeconds(0.6f);
             for (int i = 1; i <= 4; i++)
             {
-                yield return AimAndClick(Find<Swappable>($"Shaft Beacon {i}"));
+                yield return AimAndSwap(Find<Swappable>($"Shaft Beacon {i}"));
                 Assert.AreEqual(SwapRejection.None, ability.LastResult, $"Shaft beacon {i} should be in range. At {player.transform.position}");
-                yield return Tap(keyboard.spaceKey);
+                yield return Tap(keyboard.wKey);
             }
 
             Press(keyboard.dKey);
@@ -472,13 +509,13 @@ namespace TheSpaceBetween.Tests
         {
             yield return HoldRun(keyboard.dKey);
             yield return WaitUntil(() => X >= Barrier2X - 2.2f, 3f);
-            yield return Tap(keyboard.spaceKey);
+            yield return Tap(keyboard.wKey);
             yield return WaitUntil(() => X >= GapStart - 2.5f, 3f);
             yield return ReleaseAll();
             yield return WaitForDropToPass();
             yield return HoldRun(keyboard.dKey);
             yield return WaitUntil(() => X >= GapStart - 1.2f, 2f);
-            yield return Tap(keyboard.spaceKey);
+            yield return Tap(keyboard.wKey);
             yield return WaitUntil(() => StandingOn(WalkTop) && X > GapEnd + 0.5f, 2f);
             Assert.IsTrue(StandingOn(WalkTop) && X > GapEnd, $"Should cross the gap between drops. At {player.transform.position}. {FrameReport}");
             Release(keyboard.leftShiftKey);
@@ -497,14 +534,14 @@ namespace TheSpaceBetween.Tests
             yield return WaitUntil(() => StandingOn(LedgeBTop) && X > LedgeBStart + 0.5f, 6f);
             Assert.IsTrue(StandingOn(LedgeBTop), $"The second curve should lead onto its ledge. At {player.transform.position}");
             yield return WaitUntil(() => X >= LedgeBEdge - 0.1f, 3f);
-            yield return Tap(keyboard.spaceKey);
+            yield return Tap(keyboard.wKey);
             yield return WaitSeconds(0.2f);
-            yield return AimAndClick(beacon);
+            yield return AimAndSwap(beacon);
             Assert.AreEqual(SwapRejection.None, ability.LastResult, $"The beacon should be in range during the jump. At {player.transform.position}");
             yield return WaitUntil(() => StandingOn(LedgeCTop) && X > LedgeCStart, 4f);
             Assert.IsTrue(StandingOn(LedgeCTop), $"The curve after the swap should lead onto the last ledge. At {player.transform.position}");
             yield return WaitUntil(() => X >= Barrier3X - 2.2f, 3f);
-            yield return Tap(keyboard.spaceKey);
+            yield return Tap(keyboard.wKey);
             yield return PlayHalfPipe(PipeBX, LedgeCTop, 199f);
             yield return WaitUntil(() => goal.Reached, 3f);
             yield return ReleaseAll();
@@ -512,6 +549,9 @@ namespace TheSpaceBetween.Tests
 
         private IEnumerator PlayWholeRoute(StringBuilder report)
         {
+            // F1 is the first section, the route's start, wherever the scene's player happens to be saved.
+            yield return SectionKey(keyboard.f1Key);
+            Assert.AreEqual(StartX, X, 0.3f, $"F1 should reach the route's start. At {player.transform.position}");
             float start = Time.time;
             yield return PlayArrivalAndWallRun();
             report.Append($"ledge {Time.time - start:F1} s; ");
@@ -557,8 +597,9 @@ namespace TheSpaceBetween.Tests
                            $"state {animationDriver.CurrentState}, doors {doorA.State} {doorB.State} {doorC.State}, alarm {securityCamera.IsAlarmed}, lift {lift.Progress}, " +
                            $"housing {housing.Position}, housing 2 {housing2.Position}, crate {crate.Position}, beacon {beacon.Position}";
             Assert.AreEqual(1f, Time.timeScale, "Game time must run. " + state);
-            Assert.AreEqual(StartX, X, 0.3f, "The player must be at the start. " + state);
-            Assert.AreEqual(StandingHeight, Y, 0.2f, "The player must stand on the floor. " + state);
+            Assert.AreEqual(sceneStart.x, X, 0.3f, "The player must be back where the scene starts. " + state);
+            Assert.AreEqual(sceneStart.y, Y, 0.2f, "The player must stand where the scene starts. " + state);
+            Assert.IsTrue(controller.IsGrounded, "The player must stand on the floor. " + state);
             Assert.IsFalse(goal.Reached, "The goal must be unreached. " + state);
             Assert.IsFalse(controller.IsWallRunning, state);
             Assert.IsFalse(controller.ControlLocked, state);
@@ -582,12 +623,16 @@ namespace TheSpaceBetween.Tests
             Assert.IsFalse(player.transform.Find("Body/FX Wall Run Sparks").GetComponent<ParticleSystem>().isEmitting, state);
         }
 
-        private IEnumerator Restart()
+        private IEnumerator Restart(bool waitForLanding = true)
         {
             yield return Tap(keyboard.f12Key);
             yield return null;
             yield return null;
             FindSceneObjects();
+            if (waitForLanding)
+            {
+                yield return WaitForLanding();
+            }
         }
 
         //==================== THE TWO STANDING REQUIREMENTS =====================
@@ -693,7 +738,7 @@ namespace TheSpaceBetween.Tests
             float farFace = PipeAX + PipeRadius;
             yield return HoldRun(keyboard.dKey);
             yield return WaitUntil(() => X >= nearFace + 0.2f, 2f);
-            yield return Tap(keyboard.spaceKey);
+            yield return Tap(keyboard.wKey);
 
             float highestOnFarWall = 0f;
             float end = Time.time + 3f;
@@ -748,7 +793,7 @@ namespace TheSpaceBetween.Tests
             Vector3 startedAt = first.Position;
 
             yield return Teleport(ShaftX, PlatformTop);
-            yield return AimAndClick(first);
+            yield return AimAndSwap(first);
             Assert.AreEqual(SwapRejection.None, ability.LastResult, "The first beacon should be in range from the floor.");
             yield return WaitSeconds(1f);
             Assert.AreNotEqual(startedAt, first.Position, "The swap should have moved the beacon.");
@@ -775,7 +820,13 @@ namespace TheSpaceBetween.Tests
                 yield return null;
             }
 
-            yield return Tap(mouse.leftButton);
+            yield return Tap(keyboard.spaceKey);
+            float gestureEnd = Time.realtimeSinceStartup + 1f;
+            while (!ability.IsSwapping && Time.realtimeSinceStartup < gestureEnd)
+            {
+                yield return null;
+            }
+
             Assert.IsTrue(ability.IsSwapping, "The swap should be playing when the restart is pressed.");
             Assert.AreEqual(0f, Time.timeScale, "A smooth swap stops game time.");
 
@@ -822,7 +873,8 @@ namespace TheSpaceBetween.Tests
             int droppedBefore = spawner.Dropped;
             Assert.GreaterOrEqual(droppedBefore, 2, "Obstacles should have dropped by now.");
 
-            yield return Restart();
+            // Read straight after the reload, before the first drop of the new schedule.
+            yield return Restart(false);
             int droppedAfter = spawner.Dropped;
             int obstaclesAfter = Object.FindObjectsByType<FallingObstacle>(FindObjectsSortMode.None).Length;
             string result = $"dropped before {droppedBefore}, right after restart {droppedAfter}, obstacles right after {obstaclesAfter}";
@@ -862,7 +914,7 @@ namespace TheSpaceBetween.Tests
 
             yield return HoldRun(keyboard.dKey);
             yield return WaitUntil(() => X >= LedgeBEdge - 0.1f, 3f);
-            yield return Tap(keyboard.spaceKey);
+            yield return Tap(keyboard.wKey);
             float furthest = X;
             yield return WaitUntil(() =>
             {
@@ -890,7 +942,7 @@ namespace TheSpaceBetween.Tests
             yield return Teleport(PadX + 1.6f, PlatformTop);
             yield return WaitSeconds(0.3f);
             Vector3 housingStart = housing2.Position;
-            yield return AimAndClick(housing2);
+            yield return AimAndSwap(housing2);
             Assert.AreEqual(SwapRejection.None, ability.LastResult);
             yield return WaitSeconds(0.8f);
             Assert.AreEqual(AccessDoor.DoorState.Closed, doorB.State, "A housing beside the pad must not open the door.");
