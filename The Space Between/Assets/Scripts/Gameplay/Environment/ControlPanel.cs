@@ -42,9 +42,6 @@ namespace TheSpaceBetween
 
         private const int BufferSize = 16;
         private const int PromptFontSize = 64;
-        private const string BuiltinFontName = "LegacyRuntime.ttf";
-        private const string UsePrompt = "E  use";
-        private const string BlockedPrompt = "Out of reach";
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int LegacyColorId = Shader.PropertyToID("_Color");
@@ -108,6 +105,15 @@ namespace TheSpaceBetween
         [Tooltip("Size of the prompt text in world units per font pixel.")]
         [SerializeField, Min(0.01f)] private float promptSize = 0.08f;
 
+        [Tooltip("Prompt when the panel can be used. {Use} becomes the real key, such as E.")]
+        [SerializeField] private string usePrompt = "E  use";
+
+        [Tooltip("Prompt when glass or a wall is between the player and the panel.")]
+        [SerializeField] private string blockedPrompt = "Out of reach";
+
+        [Tooltip("Font of the prompt. Empty means Unity's built-in font.")]
+        [SerializeField] private Font promptFont;
+
         [Tooltip("Draw a cable from the panel to each target, so the player can see what it controls.")]
         [SerializeField] private bool showWires = true;
 
@@ -147,7 +153,7 @@ namespace TheSpaceBetween
         private readonly List<bool> startPower = new List<bool>();
         private readonly PowerWires wires = new PowerWires();
         private MaterialPropertyBlock block;
-        private TextMesh prompt;
+        private WorldPrompt prompt;
         private Collider playerCollider;
         private float lastOccupiedTime = float.NegativeInfinity;
         private bool wasOccupied;
@@ -165,7 +171,7 @@ namespace TheSpaceBetween
         public PanelActivation Activation => activation;
 
         /// <summary>The text the prompt shows right now, or empty when it is hidden.</summary>
-        public string PromptText => prompt != null && prompt.gameObject.activeSelf ? prompt.text : string.Empty;
+        public string PromptText => prompt != null && prompt.Visible ? prompt.Text : string.Empty;
 
         //==================== PUBLIC API =====================
         /// <summary>Activates the panel as if the player had used it. Respects the response setting.</summary>
@@ -304,6 +310,7 @@ namespace TheSpaceBetween
             panels.Remove(this);
             interactAction.performed -= OnInteractPerformed;
             interactAction.Disable();
+            prompt?.HideNow();
         }
 
         private void OnValidate()
@@ -356,6 +363,11 @@ namespace TheSpaceBetween
         //==================== PRIVATE =====================
         private void OnInteractPerformed(InputAction.CallbackContext context)
         {
+            if (GameplayHold.Active)
+            {
+                return;
+            }
+
             if (activation != PanelActivation.Interact || !CanReach(out _) || !IsNearestReachable())
             {
                 return;
@@ -440,31 +452,19 @@ namespace TheSpaceBetween
 
             bool latchedOn = response == PanelResponse.Latch && isOn;
             bool visible = inRange && !latchedOn;
-            prompt.gameObject.SetActive(visible);
             if (visible)
             {
-                prompt.text = playerInReach ? UsePrompt : BlockedPrompt;
+                prompt.Text = playerInReach ? WorldPrompt.Fill(usePrompt, "Use", interactAction) : blockedPrompt;
             }
+
+            // Hidden while a menu, the "position lost" return or the ending covers the game.
+            prompt.Show(visible && !GameplayHold.Active);
+            prompt.Tick();
         }
 
-        private TextMesh CreatePrompt()
+        private WorldPrompt CreatePrompt()
         {
-            var holder = new GameObject("Prompt");
-            holder.transform.SetParent(transform, false);
-            holder.transform.localPosition = promptOffset;
-            holder.layer = LayerMask.NameToLayer("Ignore Raycast");
-
-            TextMesh text = holder.AddComponent<TextMesh>();
-            Font font = Resources.GetBuiltinResource<Font>(BuiltinFontName);
-            text.font = font;
-            holder.GetComponent<MeshRenderer>().sharedMaterial = font.material;
-            text.fontSize = PromptFontSize;
-            text.characterSize = promptSize;
-            text.anchor = TextAnchor.LowerCenter;
-            text.alignment = TextAlignment.Center;
-            text.color = Color.white;
-            holder.SetActive(false);
-            return text;
+            return new WorldPrompt(transform, "Prompt", promptOffset, PromptFontSize, promptSize, Color.white, promptFont, TextAnchor.LowerCenter);
         }
 
         private void ShowState()

@@ -20,12 +20,12 @@ namespace TheSpaceBetween
 
         public bool IsVisible => text != null && text.gameObject.activeSelf;
 
-        public ReasonLabel(string ownerName, float size)
+        public ReasonLabel(string ownerName, float size, Font customFont = null)
         {
             GameObject holder = new GameObject($"{ownerName} Swap Reason");
             text = holder.AddComponent<TextMesh>();
 
-            Font font = Resources.GetBuiltinResource<Font>(BuiltinFontName);
+            Font font = customFont != null ? customFont : Resources.GetBuiltinResource<Font>(BuiltinFontName);
             text.font = font;
             holder.GetComponent<MeshRenderer>().sharedMaterial = font.material;
             text.fontSize = FontSize;

@@ -61,6 +61,12 @@ namespace TheSpaceBetween
         /// <summary>Raised after the room has been reset, for things that put themselves back, such as crumbling slabs.</summary>
         public event System.Action WasReset;
 
+        /// <summary>
+        /// Set by the Facility UI to play its "position lost" return when a hazard is touched. It returns true when it
+        /// takes over, and then resets the room itself once the view is dark. Empty means hazards reset at once.
+        /// </summary>
+        public static System.Func<RoomReset, bool> FailureHandler;
+
         /// <summary>The first active room reset whose area contains a point, or null.</summary>
         public static RoomReset FindContaining(Vector3 point)
         {
@@ -157,10 +163,29 @@ namespace TheSpaceBetween
         //==================== RESET =====================
         private void OnResetPerformed(InputAction.CallbackContext context)
         {
+            if (GameplayHold.Active)
+            {
+                return;
+            }
+
             if (player != null && area.bounds.Contains(player.Center))
             {
                 ResetRoom();
             }
+        }
+
+        /// <summary>
+        /// The player failed here, for example by touching a hazard. Resets the room, after the Facility UI's
+        /// "position lost" return when there is one.
+        /// </summary>
+        public void Fail()
+        {
+            if (FailureHandler != null && FailureHandler(this))
+            {
+                return;
+            }
+
+            ResetRoom();
         }
 
         /// <summary>Moves every listed object back to its start and the player to the entry point.</summary>

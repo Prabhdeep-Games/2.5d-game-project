@@ -113,8 +113,11 @@ namespace TheSpaceBetween
         [Tooltip("Seconds the opening line stays before hints may replace it.")]
         [SerializeField, Min(0f)] private float introSeconds = 7f;
 
-        [Tooltip("Shown once the goal is reached.")]
+        [Tooltip("Shown once the goal is reached. Leave empty when an Ending Sequence shows the ending instead.")]
         [SerializeField] private string endText = "End of the Final Playtest. Thank you.";
+
+        [Tooltip("Font of the hint and the closing line. Empty means Unity's built-in font.")]
+        [SerializeField] private Font uiFont;
 
 
         [Tooltip("Signs in the level that show the controls. Their keys follow the bindings and the device in use.")]
@@ -149,6 +152,7 @@ namespace TheSpaceBetween
         private InputDevice builtFor = (InputDevice)(-1);
         private float startTime;
         private Font font;
+        private Canvas canvas;
         private CanvasGroup hintGroup;
         private Text hintLabel;
         private CanvasGroup endGroup;
@@ -159,6 +163,12 @@ namespace TheSpaceBetween
         private readonly Dictionary<RoomReset, System.Action> resetListeners = new Dictionary<RoomReset, System.Action>();
 
         //==================== READ ACCESS =====================
+        /// <summary>True while a Facility UI screen or sequence covers the game; the hints stay hidden until it ends.</summary>
+        public static bool HiddenByInterface { get; set; }
+
+        /// <summary>The device the player used last, for prompts elsewhere in the level.</summary>
+        public static InputDevice LastDevice { get; private set; }
+
         /// <summary>The device the guidance currently describes.</summary>
         public InputDevice ActiveDevice => device;
 
@@ -207,7 +217,7 @@ namespace TheSpaceBetween
                 }
             }
 
-            font = Resources.GetBuiltinResource<Font>(BuiltinFontName);
+            font = uiFont != null ? uiFont : Resources.GetBuiltinResource<Font>(BuiltinFontName);
             BuildInterface();
         }
 
@@ -263,6 +273,12 @@ namespace TheSpaceBetween
             }
 
             UpdateDevice();
+            LastDevice = device;
+            if (canvas != null && canvas.enabled == HiddenByInterface)
+            {
+                canvas.enabled = !HiddenByInterface;
+            }
+
             if (builtFor != device)
             {
                 RefreshSigns();
@@ -296,7 +312,7 @@ namespace TheSpaceBetween
                 SetHint(null, null, false);
             }
 
-            Fade(endGroup, finished);
+            Fade(endGroup, finished && !string.IsNullOrEmpty(endText));
             AnimateHint();
         }
 
@@ -488,7 +504,7 @@ namespace TheSpaceBetween
                 : path.StartsWith("<Keyboard>", StringComparison.Ordinal) || path.StartsWith("<Mouse>", StringComparison.Ordinal);
         }
 
-        private static string Label(InputAction action, InputDevice forDevice)
+        internal static string Label(InputAction action, InputDevice forDevice)
         {
             if (action == null)
             {
@@ -507,7 +523,7 @@ namespace TheSpaceBetween
         }
 
         // A two-way composite such as A and D: both parts, or just one of them.
-        private static string CompositeLabel(InputAction action, InputDevice forDevice, string part)
+        internal static string CompositeLabel(InputAction action, InputDevice forDevice, string part)
         {
             if (action == null)
             {
@@ -601,7 +617,7 @@ namespace TheSpaceBetween
         {
             var canvasObject = new GameObject("Tutorial UI", typeof(RectTransform));
             canvasObject.transform.SetParent(transform, false);
-            var canvas = canvasObject.AddComponent<Canvas>();
+            canvas = canvasObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 10;
             var scaler = canvasObject.AddComponent<CanvasScaler>();

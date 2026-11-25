@@ -6,8 +6,8 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/Wall_Run_Test.unity
-    guid: 615c98d88ed4a57468e9c7a5ac118c66
+    path: Assets/Scenes/MainMenu.unity
+    guid: 796ecbf067cce704d9dd4ce4650d524f
   - enabled: 1
     path: Assets/Scenes/Environment_Elements.unity
     guid: abaa1a1a1e5669046b077d1577c2cf8f
@@ -17,9 +17,6 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Playtest_Full.unity
     guid: bcab1ac80d2da8d4da2762339694cc4f
-  - enabled: 1
-    path: Assets/Scenes/Room_Generator_Sandbox.unity
-    guid: 4df3a6a67c110bc45a82192f7c7057c1
   - enabled: 1
     path: Assets/Scenes/animation_Trial.unity
     guid: 03bca54c96c4d694e853d8c799dd16a6

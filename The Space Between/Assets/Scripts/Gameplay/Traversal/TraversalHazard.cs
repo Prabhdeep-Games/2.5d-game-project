@@ -68,7 +68,7 @@ namespace TheSpaceBetween
                 return;
             }
 
-            room.ResetRoom();
+            room.Fail();
         }
     }
 }

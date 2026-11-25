@@ -1,0 +1,429 @@
+/* The Space Between: shared interface style. Every screen of the Facility UI uses these classes.
+   Palette from the Art Direction Bible: deep shadow and concrete for panels, mineral grey text,
+   burnt ochre only for what is selected or active. Swap cyan is not used here; it belongs to the swap. */
+
+/* The document root fills the screen; without Unity's default theme it would have no height. */
+.fui-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    -unity-font: url("project://database/Assets/Fonts/IBMPlexSansCondensed-Light.ttf");
+    color: rgb(201, 203, 196);
+}
+
+/* Fixed sizes stay fixed; UI Toolkit would otherwise let thin lines and rows shrink to nothing. */
+.fui-root * {
+    flex-shrink: 0;
+}
+
+.fui-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.fui-screen {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.fui-fader {
+    background-color: rgb(18, 22, 25);
+}
+
+/* ---------- Shared text ---------- */
+
+.fui-heading {
+    -unity-font: url("project://database/Assets/Fonts/IBMPlexSansCondensed-Regular.ttf");
+    font-size: 16px;
+    letter-spacing: 10px;
+    color: rgb(138, 145, 148);
+}
+
+.fui-rule {
+    height: 1px;
+    background-color: rgba(179, 181, 173, 0.2);
+    margin: 18px 56px 34px 0;
+}
+
+.fui-value {
+    font-size: 18px;
+    letter-spacing: 3px;
+    color: rgb(201, 203, 196);
+}
+
+.fui-note {
+    -unity-font: url("project://database/Assets/Fonts/IBMPlexSansCondensed-Regular.ttf");
+    margin-top: 22px;
+    font-size: 14px;
+    letter-spacing: 1px;
+    color: rgb(111, 120, 123);
+    white-space: normal;
+}
+
+/* ---------- Menu options: brighter when selected, with a short ochre line ---------- */
+
+.fui-option {
+    flex-direction: row;
+    align-items: center;
+    height: 46px;
+}
+
+.fui-indicator {
+    width: 0;
+    height: 2px;
+    margin-right: 0;
+    background-color: rgb(181, 111, 67);
+    transition-duration: 0.25s;
+}
+
+.fui-option.is-selected .fui-indicator,
+.fui-row.is-selected .fui-indicator {
+    width: 22px;
+    margin-right: 16px;
+}
+
+.fui-option-label {
+    font-size: 24px;
+    letter-spacing: 6px;
+    color: rgb(138, 145, 148);
+    transition-duration: 0.25s;
+}
+
+.fui-option.is-selected .fui-option-label {
+    color: rgb(226, 227, 221);
+}
+
+.fui-option.is-disabled .fui-option-label {
+    color: rgb(69, 77, 81);
+}
+
+/* ---------- Main menu ---------- */
+
+.fui-main {
+    justify-content: center;
+    padding-left: 150px;
+}
+
+.fui-main-title {
+    -unity-font: url("project://database/Assets/Fonts/IBMPlexSansCondensed-ExtraLight.ttf");
+    font-size: 54px;
+    letter-spacing: 22px;
+    color: rgb(212, 214, 207);
+}
+
+.fui-main-rule {
+    width: 64px;
+    height: 2px;
+    background-color: rgb(181, 111, 67);
+    margin: 26px 0 44px 0;
+}
+
+/* ---------- Pause: a narrow panel on the left, the level visible beside it ---------- */
+
+.fui-pause-panel {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 440px;
+    padding: 160px 0 0 72px;
+    background-color: rgba(28, 34, 38, 0.86);
+    border-right-width: 1px;
+    border-right-color: rgba(179, 181, 173, 0.2);
+}
+
+.fui-pause-menu .fui-option-label {
+    font-size: 22px;
+}
+
+/* ---------- Settings ---------- */
+
+.fui-settings {
+    background-color: rgba(20, 24, 27, 0.95);
+}
+
+.fui-settings-page {
+    position: absolute;
+    left: 150px;
+    right: 150px;
+    top: 110px;
+    bottom: 80px;
+}
+
+.fui-settings-columns {
+    flex-direction: row;
+    flex-grow: 1;
+}
+
+.fui-settings-column {
+    flex-grow: 1;
+    flex-basis: 0;
+    margin-right: 90px;
+}
+
+.fui-section {
+    -unity-font: url("project://database/Assets/Fonts/IBMPlexSansCondensed-Regular.ttf");
+    font-size: 14px;
+    letter-spacing: 8px;
+    color: rgb(111, 120, 123);
+    margin: 26px 0 10px 0;
+    padding-bottom: 8px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(179, 181, 173, 0.16);
+}
+
+.fui-row {
+    flex-direction: row;
+    align-items: center;
+    height: 42px;
+}
+
+.fui-row-label {
+    width: 260px;
+    font-size: 18px;
+    letter-spacing: 4px;
+    color: rgb(138, 145, 148);
+    transition-duration: 0.25s;
+}
+
+.fui-row.is-selected .fui-row-label {
+    color: rgb(226, 227, 221);
+}
+
+.fui-stepper {
+    flex-direction: row;
+    align-items: center;
+}
+
+.fui-stepper-arrow {
+    font-size: 24px;
+    padding: 0 12px;
+    color: rgb(111, 120, 123);
+}
+
+.fui-stepper .fui-value {
+    min-width: 180px;
+    -unity-text-align: middle-center;
+}
+
+.fui-toggle {
+    flex-direction: row;
+    align-items: center;
+}
+
+.fui-toggle-box {
+    width: 32px;
+    height: 14px;
+    padding: 2px;
+    margin-right: 16px;
+    border-width: 1px;
+    border-color: rgb(111, 120, 123);
+}
+
+.fui-toggle-fill {
+    width: 50%;
+    flex-grow: 1;
+    background-color: rgb(89, 100, 106);
+}
+
+.fui-toggle-box.is-on {
+    flex-direction: row-reverse;
+    border-color: rgb(181, 111, 67);
+}
+
+.fui-toggle-box.is-on .fui-toggle-fill {
+    background-color: rgb(181, 111, 67);
+}
+
+.fui-slider {
+    flex-direction: row;
+    align-items: center;
+}
+
+.fui-slider-track {
+    width: 260px;
+    height: 20px;
+    justify-content: center;
+    margin-right: 18px;
+}
+
+.fui-slider-line {
+    height: 2px;
+    background-color: rgba(179, 181, 173, 0.22);
+}
+
+.fui-slider-fill {
+    height: 2px;
+    background-color: rgb(181, 111, 67);
+}
+
+.fui-controls-header {
+    height: 30px;
+}
+
+.fui-controls-header .fui-row-label,
+.fui-control-row .fui-row-label {
+    width: 170px;
+}
+
+.fui-control-device {
+    -unity-font: url("project://database/Assets/Fonts/IBMPlexSansCondensed-Regular.ttf");
+    width: 270px;
+    font-size: 12px;
+    letter-spacing: 5px;
+    color: rgb(111, 120, 123);
+}
+
+.fui-control-row {
+    height: auto;
+    min-height: 40px;
+    padding: 5px 0;
+}
+
+.fui-control-key {
+    width: 270px;
+    padding-right: 14px;
+    font-size: 16px;
+    letter-spacing: 3px;
+    color: rgb(201, 203, 196);
+    white-space: normal;
+}
+
+.fui-settings-back {
+    margin-top: 16px;
+}
+
+/* ---------- Messages: POSITION LOST, and the ending's title ---------- */
+
+.fui-message {
+    align-items: center;
+    justify-content: center;
+}
+
+.fui-message-title {
+    font-size: 30px;
+    letter-spacing: 12px;
+    padding-left: 12px;
+    color: rgb(201, 203, 196);
+    -unity-text-align: middle-center;
+}
+
+.fui-message-subtitle {
+    -unity-font: url("project://database/Assets/Fonts/IBMPlexSansCondensed-Regular.ttf");
+    margin-top: 30px;
+    font-size: 18px;
+    letter-spacing: 14px;
+    padding-left: 14px;
+    color: rgb(138, 145, 148);
+    -unity-text-align: middle-center;
+}
+
+.fui-message.is-title {
+    justify-content: flex-start;
+    padding-top: 300px;
+}
+
+.fui-message.is-title .fui-message-title {
+    -unity-font: url("project://database/Assets/Fonts/IBMPlexSansCondensed-ExtraLight.ttf");
+    font-size: 58px;
+    letter-spacing: 26px;
+    padding-left: 26px;
+    color: rgb(212, 214, 207);
+}
+
+/* ---------- Loading ---------- */
+
+.fui-loading {
+    background-color: rgb(22, 27, 30);
+}
+
+.fui-loading-title {
+    -unity-font: url("project://database/Assets/Fonts/IBMPlexSansCondensed-Regular.ttf");
+    position: absolute;
+    left: 72px;
+    top: 60px;
+    font-size: 14px;
+    letter-spacing: 8px;
+    color: rgb(111, 120, 123);
+}
+
+.fui-loading-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 220px;
+    align-items: center;
+}
+
+.fui-loading-track {
+    width: 520px;
+    height: 2px;
+    background-color: rgba(179, 181, 173, 0.18);
+}
+
+.fui-loading-fill {
+    width: 0;
+    height: 2px;
+    background-color: rgb(181, 111, 67);
+}
+
+.fui-loading-message {
+    -unity-font: url("project://database/Assets/Fonts/IBMPlexSansCondensed-Regular.ttf");
+    margin-top: 24px;
+    font-size: 14px;
+    letter-spacing: 8px;
+    padding-left: 8px;
+    color: rgb(138, 145, 148);
+}
+
+/* ---------- Credits ---------- */
+
+.fui-credits {
+    overflow: hidden;
+    background-color: rgba(16, 20, 22, 0.7);
+}
+
+.fui-credits-column {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    align-items: center;
+}
+
+.fui-credits-heading {
+    -unity-font: url("project://database/Assets/Fonts/IBMPlexSansCondensed-ExtraLight.ttf");
+    font-size: 36px;
+    letter-spacing: 18px;
+    padding-left: 18px;
+    margin-bottom: 50px;
+    color: rgb(212, 214, 207);
+}
+
+.fui-credits-role {
+    -unity-font: url("project://database/Assets/Fonts/IBMPlexSansCondensed-Regular.ttf");
+    margin-top: 26px;
+    font-size: 13px;
+    letter-spacing: 6px;
+    padding-left: 6px;
+    color: rgb(111, 120, 123);
+}
+
+.fui-credits-name {
+    margin-top: 6px;
+    font-size: 22px;
+    letter-spacing: 3px;
+    color: rgb(201, 203, 196);
+}
+
+.fui-credits-gap {
+    height: 50px;
+}

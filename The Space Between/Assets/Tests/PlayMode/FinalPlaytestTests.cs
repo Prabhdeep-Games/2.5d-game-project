@@ -18,6 +18,8 @@ namespace TheSpaceBetween.Tests
     public class FinalPlaytestTests : InputTestFixture
     {
         private const string SceneName = "Final_Playtest";
+        private const string MenuScene = "MainMenu";
+        private const string ProgressKey = "TheSpaceBetween.Progress.Room";
         private const float StandingHeight = 1.08f;
         private const int AimFrames = 3;
         private const float SwapWaitLimitSeconds = 3f;
@@ -33,10 +35,14 @@ namespace TheSpaceBetween.Tests
         private RoomReset[] sections;
         private TutorialGuide guide;
         private readonly System.Collections.Generic.List<string> hintsSeen = new System.Collections.Generic.List<string>();
+        private int savedProgress;
 
         public override void Setup()
         {
             base.Setup();
+
+            // The tests play through rooms and the menu, which saves progress; the developer's own save is put back after.
+            savedProgress = PlayerPrefs.GetInt(ProgressKey, int.MinValue);
             InputSystem.settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
             InputSystem.settings.editorInputBehaviorInPlayMode = InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
             keyboard = InputSystem.AddDevice<Keyboard>();
@@ -47,14 +53,32 @@ namespace TheSpaceBetween.Tests
         public IEnumerator UnloadScene()
         {
             Time.timeScale = 1f;
-            Scene scene = SceneManager.GetSceneByName(SceneName);
-            if (!scene.isLoaded)
+            if (savedProgress == int.MinValue)
+            {
+                PlayerPrefs.DeleteKey(ProgressKey);
+            }
+            else
+            {
+                PlayerPrefs.SetInt(ProgressKey, savedProgress);
+            }
+
+            Scene level = SceneManager.GetSceneByName(SceneName);
+            Scene menu = SceneManager.GetSceneByName(MenuScene);
+            if (!level.isLoaded && !menu.isLoaded)
             {
                 yield break;
             }
 
             SceneManager.SetActiveScene(SceneManager.CreateScene("Empty After Final Playtest"));
-            yield return SceneManager.UnloadSceneAsync(scene);
+            if (level.isLoaded)
+            {
+                yield return SceneManager.UnloadSceneAsync(level);
+            }
+
+            if (menu.isLoaded)
+            {
+                yield return SceneManager.UnloadSceneAsync(menu);
+            }
         }
 
         //==================== HELPERS =====================
@@ -62,6 +86,12 @@ namespace TheSpaceBetween.Tests
         {
             yield return SceneManager.LoadSceneAsync(SceneName, LoadSceneMode.Single);
             yield return null;
+            GatherReferences();
+            yield return WaitSeconds(0.5f);
+        }
+
+        private void GatherReferences()
+        {
             player = GameObject.Find("Player");
             Assert.NotNull(player, $"{SceneName} needs a Player.");
             controller = player.GetComponent<PlaceholderPlayerController>();
@@ -81,7 +111,6 @@ namespace TheSpaceBetween.Tests
             {
                 Assert.NotNull(section, "A section has lost its Room Reset.");
             }
-            yield return WaitSeconds(0.5f);
         }
 
         private static T Find<T>(string name) where T : Component
@@ -118,6 +147,25 @@ namespace TheSpaceBetween.Tests
             {
                 yield return null;
                 NoteHint();
+            }
+        }
+
+        // Real time, for waits while the game is paused and game time stands still.
+        private static IEnumerator WaitReal(float seconds)
+        {
+            float end = Time.realtimeSinceStartup + seconds;
+            while (Time.realtimeSinceStartup < end)
+            {
+                yield return null;
+            }
+        }
+
+        private static IEnumerator WaitRealUntil(System.Func<bool> condition, float limitSeconds)
+        {
+            float end = Time.realtimeSinceStartup + limitSeconds;
+            while (!condition() && Time.realtimeSinceStartup < end)
+            {
+                yield return null;
             }
         }
 
@@ -575,9 +623,11 @@ namespace TheSpaceBetween.Tests
         }
 
         [UnityTest]
-        public IEnumerator Goal_ShowsTheClosingLine_AndNoHint()
+        public IEnumerator Goal_PlaysTheEnding_StillView_TitleThenEnd_ThenCreditsAndTheMenu()
         {
             yield return LoadScene();
+            FacilityUI ui = FacilityUI.Current;
+            Assert.NotNull(ui, "The level needs its Facility UI.");
             LevelGoal goal = Object.FindAnyObjectByType<LevelGoal>();
             CharacterController body = player.GetComponent<CharacterController>();
             body.enabled = false;
@@ -585,10 +635,201 @@ namespace TheSpaceBetween.Tests
             body.enabled = true;
             Physics.SyncTransforms();
             yield return WaitUntil(() => goal.Reached, 2f);
-            yield return WaitSeconds(0.6f);
+            yield return WaitSeconds(0.5f);
             Assert.IsTrue(goal.Reached, "The goal should register the player.");
-            Assert.IsTrue(guide.EndVisible, "The closing line shows at the goal.");
-            Assert.IsNull(guide.CurrentHintText, "No hint stays up at the goal.");
+            Assert.IsTrue(ui.IsEnding, "Reaching the goal starts the ending.");
+            Assert.IsTrue(controller.ControlLocked && GameplayHold.Active, "The player is still during the ending.");
+            Assert.IsFalse(guide.EndVisible, "The tutorial's own closing line gives way to the ending.");
+            Assert.IsNull(ui.MessageText, "The view is held still before the title.");
+
+            yield return WaitUntil(() => ui.MessageText == "THE SPACE BETWEEN", 6f);
+            Assert.AreEqual("THE SPACE BETWEEN", ui.MessageText, "The title appears after the pause.");
+            Assert.IsNull(ui.MessageSubtitle, "END comes after the title.");
+            var brain = Object.FindAnyObjectByType<Unity.Cinemachine.CinemachineBrain>();
+            Assert.AreEqual("CM Ending View", brain.ActiveVirtualCamera?.Name, "The still, wide ending view is live.");
+
+            yield return WaitUntil(() => ui.MessageSubtitle == "END", 6f);
+            Assert.AreEqual("END", ui.MessageSubtitle);
+            Assert.IsNull(ui.TopScreen, "The credits wait until END has been read.");
+
+            yield return WaitUntil(() => ui.TopScreen == "Credits", 10f);
+            Assert.AreEqual("Credits", ui.TopScreen, "The credits follow the ending.");
+            ui.Back();
+            yield return WaitUntil(() => SceneManager.GetActiveScene().name == MenuScene, 10f);
+            yield return WaitUntil(() => FacilityUI.Current != null && FacilityUI.Current.TopScreen == "Main Menu" && !FacilityUI.Current.LoadingVisible, 5f);
+            Assert.AreEqual(MenuScene, SceneManager.GetActiveScene().name, "Skipping the credits returns to the main menu.");
+            Assert.IsFalse(GameplayHold.Active);
+        }
+
+        //==================== FACILITY UI =====================
+        [UnityTest]
+        public IEnumerator Pause_StopsTheGame_DimsTheView_AndResumesWhereItWas()
+        {
+            yield return LoadScene();
+            yield return GoToSection(1);
+            FacilityUI ui = FacilityUI.Current;
+            yield return Tap(keyboard.escapeKey);
+            Assert.IsTrue(ui.IsPaused, "Escape pauses.");
+            Assert.AreEqual(0f, Time.timeScale, "Game time stops.");
+            Assert.AreEqual("Pause", ui.TopScreen);
+            CollectionAssert.AreEqual(new[] { "Resume", "Restart Checkpoint", "Settings", "Main Menu" }, ui.Options);
+            Assert.AreEqual("Resume", ui.SelectedOption);
+
+            Vector3 at = player.transform.position;
+            Press(keyboard.dKey);
+            yield return WaitReal(0.6f);
+            Release(keyboard.dKey);
+            yield return null;
+            Assert.Less(Vector3.Distance(at, player.transform.position), 0.01f, "Nothing moves while paused.");
+            Assert.Greater(ui.LookWeight, 0.9f, "The paused view is darkened and drained.");
+
+            yield return Tap(keyboard.downArrowKey);
+            Assert.AreEqual("Restart Checkpoint", ui.SelectedOption, "Down moves the selection.");
+            yield return Tap(keyboard.upArrowKey);
+            Assert.AreEqual("Resume", ui.SelectedOption);
+            yield return Tap(keyboard.enterKey);
+            Assert.IsFalse(ui.IsPaused, "Resume closes the menu.");
+            Assert.AreEqual(1f, Time.timeScale, "Game time runs again.");
+            Assert.IsNull(ui.TopScreen);
+            Assert.IsFalse(GameplayHold.Active);
+            yield return WaitReal(0.6f);
+            Assert.Less(ui.LookWeight, 0.05f, "The view comes back.");
+            yield return WalkTo(at.x + 2f);
+            Assert.Greater(X, at.x + 1.5f, "The player moves again after Resume.");
+        }
+
+        [UnityTest]
+        public IEnumerator Pause_Settings_ShowTheRealBindings_ApplyAtOnce_AndEscapeGoesBack()
+        {
+            yield return LoadScene();
+            FacilityUI ui = FacilityUI.Current;
+            yield return Tap(keyboard.escapeKey);
+            Assert.IsTrue(ui.Choose("Settings"));
+            yield return null;
+            Assert.AreEqual("Settings", ui.TopScreen);
+
+            var keys = TutorialGuide.InputDevice.KeyboardMouse;
+            var pad = TutorialGuide.InputDevice.Gamepad;
+            Assert.AreEqual(guide.KeyLabel("Move", keys).ToUpperInvariant(), ui.ControlText("Movement", false));
+            Assert.AreEqual(guide.KeyLabel("Jump", keys).ToUpperInvariant(), ui.ControlText("Jump", false));
+            Assert.AreEqual(guide.KeyLabel("Swap", keys).ToUpperInvariant(), ui.ControlText("Swap", false));
+            Assert.AreEqual(guide.KeyLabel("Slide", keys).ToUpperInvariant(), ui.ControlText("Slide", false));
+            Assert.AreEqual(guide.KeyLabel("Observe", keys).ToUpperInvariant(), ui.ControlText("Observe", false));
+            Assert.AreEqual(guide.KeyLabel("Jump", pad).ToUpperInvariant(), ui.ControlText("Jump", true));
+            StringAssert.StartsWith(guide.KeyLabel("Run", keys).ToUpperInvariant(), ui.ControlText("Wall Run", false));
+
+            bool vSync = GameSettings.VSync;
+            ui.StepSetting("VSync", 1);
+            Assert.AreEqual(vSync ? 0 : 1, QualitySettings.vSyncCount, "VSync changes at once.");
+            ui.StepSetting("VSync", 1);
+            Assert.AreEqual(vSync ? 1 : 0, QualitySettings.vSyncCount);
+
+            float master = GameSettings.Master;
+            ui.StepSetting("Master Volume", -1);
+            Assert.AreEqual(Mathf.Round((master - 0.05f) / 0.05f) * 0.05f, AudioListener.volume, 0.001f, "Master volume is the AudioListener volume.");
+            ui.StepSetting("Master Volume", 1);
+            Assert.AreEqual(master, AudioListener.volume, 0.001f);
+
+            yield return Tap(keyboard.escapeKey);
+            Assert.AreEqual("Pause", ui.TopScreen, "Escape goes back to the pause menu.");
+            yield return Tap(keyboard.escapeKey);
+            Assert.IsFalse(ui.IsPaused, "Escape again resumes.");
+            Assert.AreEqual(1f, Time.timeScale);
+        }
+
+        [UnityTest]
+        public IEnumerator Pause_RestartCheckpoint_ReturnsToTheRoomEntry_WithoutTheFailureLine()
+        {
+            yield return LoadScene();
+            yield return GoToSection(1);
+            yield return WalkTo(Entry(1).x + 5f);
+            Assert.Greater(X, Entry(1).x + 4f);
+            FacilityUI ui = FacilityUI.Current;
+            yield return Tap(keyboard.escapeKey);
+            Assert.IsTrue(ui.Choose("Restart Checkpoint"));
+            Assert.IsFalse(ui.IsPaused);
+            yield return WaitRealUntil(() => !ui.IsReturning, 2f);
+            yield return WaitSeconds(0.3f);
+            Assert.AreEqual(Entry(1).x, X, 0.4f, "The player is back at the room's entry.");
+            Assert.IsNull(ui.MessageText, "A restart is not a failure, so POSITION LOST does not show.");
+            Assert.IsFalse(GameplayHold.Active);
+            Assert.IsFalse(controller.ControlLocked);
+        }
+
+        [UnityTest]
+        public IEnumerator Hazard_PositionLost_GoesDark_ShowsTheLine_ThenReturnsToTheRoom()
+        {
+            yield return LoadScene();
+            FacilityUI ui = FacilityUI.Current;
+            TraversalHazard hazard = null;
+            foreach (TraversalHazard candidate in Object.FindObjectsByType<TraversalHazard>(FindObjectsSortMode.InstanceID))
+            {
+                if (hazard == null && candidate.Room != null && candidate.GetComponent<Collider>() != null && candidate.GetComponent<FallingObstacle>() == null)
+                {
+                    hazard = candidate;
+                }
+            }
+
+            Assert.NotNull(hazard, "The level needs a hazard with a room.");
+            Vector3 hazardAt = hazard.GetComponent<Collider>().bounds.center;
+            CharacterController body = player.GetComponent<CharacterController>();
+            body.enabled = false;
+            player.transform.position = hazardAt;
+            body.enabled = true;
+            Physics.SyncTransforms();
+
+            yield return WaitUntil(() => ui.IsReturning, 1f);
+            Assert.IsTrue(ui.IsReturning, $"Touching '{hazard.name}' starts the return.");
+            Assert.IsTrue(GameplayHold.Active && controller.ControlLocked, "Control is held during the return.");
+            yield return WaitUntil(() => ui.MessageText == "POSITION LOST", 2f);
+            Assert.AreEqual("POSITION LOST", ui.MessageText);
+            yield return WaitUntil(() => !ui.IsReturning, 3f);
+            Assert.IsFalse(ui.IsReturning, "The return ends on its own.");
+            Assert.IsFalse(GameplayHold.Active);
+            Assert.IsFalse(controller.ControlLocked, "Control comes back.");
+            Assert.IsTrue(hazard.Room.Area.Contains(player.transform.position + Vector3.up), $"The player is back in '{hazard.Room.name}'. At {player.transform.position}");
+            Assert.Greater(Vector3.Distance(player.transform.position, hazardAt), 2f, "The player is no longer on the hazard.");
+            Assert.AreEqual(1, hazard.Hits, "One touch, one return.");
+            yield return WaitSeconds(0.6f);
+            Assert.IsNull(ui.MessageText, "Nothing stays on screen.");
+        }
+
+        [UnityTest]
+        public IEnumerator MainMenu_ContinueNeedsASave_NewGameStartsAtRoom1_AndTheMenuOffersContinueAfter()
+        {
+            GameProgress.Clear();
+            yield return SceneManager.LoadSceneAsync(MenuScene, LoadSceneMode.Single);
+            yield return null;
+            yield return null;
+            FacilityUI ui = FacilityUI.Current;
+            Assert.NotNull(ui, "The menu needs its Facility UI.");
+            Assert.AreEqual("Main Menu", ui.TopScreen);
+            CollectionAssert.AreEqual(new[] { "Continue", "New Game", "Settings", "Credits", "Quit" }, ui.Options);
+            Assert.IsFalse(ui.IsOptionEnabled("Continue"), "Continue is off without saved progress.");
+            Assert.AreEqual("New Game", ui.SelectedOption, "The first option that can be chosen is selected.");
+
+            Assert.IsTrue(ui.Choose("Credits"));
+            Assert.AreEqual("Credits", ui.TopScreen);
+            ui.Back();
+            Assert.AreEqual("Main Menu", ui.TopScreen, "Credits close back to the menu.");
+
+            Assert.IsTrue(ui.Choose("New Game"));
+            yield return null;
+            Assert.IsTrue(ui.LoadingVisible, "New Game shows the loading screen.");
+            yield return WaitUntil(() => SceneManager.GetActiveScene().name == SceneName, 10f);
+            yield return WaitUntil(() => FacilityUI.Current != null && !FacilityUI.Current.LoadingVisible, 5f);
+            Assert.AreEqual(SceneName, SceneManager.GetActiveScene().name);
+            GatherReferences();
+            Assert.AreEqual(Entry(0).x, X, 0.4f, "New Game starts at the first room.");
+            Assert.AreEqual(0, GameProgress.Room, "Progress is saved from the first room.");
+
+            ui = FacilityUI.Current;
+            yield return Tap(keyboard.escapeKey);
+            Assert.IsTrue(ui.Choose("Main Menu"));
+            yield return WaitUntil(() => SceneManager.GetActiveScene().name == MenuScene, 10f);
+            yield return WaitUntil(() => FacilityUI.Current != null && FacilityUI.Current.TopScreen == "Main Menu", 5f);
+            Assert.AreEqual(1f, Time.timeScale, "Leaving from the pause menu starts game time again.");
+            Assert.IsTrue(FacilityUI.Current.IsOptionEnabled("Continue"), "Continue is on once there is progress.");
         }
 
         //==================== TUTORIAL GUIDANCE =====================

@@ -132,6 +132,14 @@ namespace TheSpaceBetween
         [ShowIf(nameof(showReason))]
         [SerializeField, Min(0.01f)] private float reasonSize = 0.1f;
 
+        [Tooltip("Font of the reason text. Empty means Unity's built-in font.")]
+        [ShowIf(nameof(showReason))]
+        [SerializeField] private Font reasonFont;
+
+        [Tooltip("Show the reason in capitals, like the rest of the facility's interface.")]
+        [ShowIf(nameof(showReason))]
+        [SerializeField] private bool reasonInCapitals;
+
         //==================== SUCCESS =====================
         [InspectorSection("Success")]
         [Tooltip("Colour both bodies flash when a swap completes.")]
@@ -235,7 +243,7 @@ namespace TheSpaceBetween
             self = GetComponent<Swappable>();
             aimLine = new AimLineView(transform, lineMaterial);
             tints = new TintPainter();
-            reason = new ReasonLabel(name, reasonSize);
+            reason = new ReasonLabel(name, reasonSize, reasonFont);
             displacement = new DisplacementRenderer();
         }
 
@@ -323,7 +331,7 @@ namespace TheSpaceBetween
             if (showReason)
             {
                 Vector3 anchor = rejectedTarget != null ? rejectedTarget.Center : ability.AimEndPoint;
-                reason.Show(lastMessage, anchor + reasonOffset, reasonSeconds);
+                reason.Show(reasonInCapitals ? lastMessage.ToUpperInvariant() : lastMessage, anchor + reasonOffset, reasonSeconds);
             }
         }
 

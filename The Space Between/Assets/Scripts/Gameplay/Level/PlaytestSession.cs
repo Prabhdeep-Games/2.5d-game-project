@@ -52,6 +52,9 @@ namespace TheSpaceBetween
 
         public int SectionKeysUsed => sectionKeysUsed;
 
+        /// <summary>The room of each section, in route order. Read only; the Facility UI saves progress by them.</summary>
+        public System.Collections.Generic.IReadOnlyList<RoomReset> Sections => sections;
+
         //==================== LIFECYCLE =====================
         private void Awake()
         {
@@ -68,7 +71,7 @@ namespace TheSpaceBetween
         private void Update()
         {
             Keyboard keyboard = Keyboard.current;
-            if (keyboard == null)
+            if (keyboard == null || GameplayHold.Active)
             {
                 return;
             }

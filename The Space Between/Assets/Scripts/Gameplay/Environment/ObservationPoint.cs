@@ -19,7 +19,6 @@ namespace TheSpaceBetween
     /// </summary>
     public class ObservationPoint : MonoBehaviour
     {
-        private const string BuiltinFontName = "LegacyRuntime.ttf";
         private const int PromptFontSize = 64;
         private const float LeaveMargin = 1f;   // How far past the radius the player must be moved before observing ends.
 
@@ -47,7 +46,7 @@ namespace TheSpaceBetween
 
         //==================== PROMPTS =====================
         [Header("Prompts")]
-        [Tooltip("Text shown when the player can enter observation mode.")]
+        [Tooltip("Text shown when the player can enter observation mode. {Observe} becomes the real key, such as E.")]
         [SerializeField] private string interactionPrompt = "E - Observe";
 
         [Tooltip("Text shown while observing, when the player can leave by pressing the action again.")]
@@ -61,6 +60,9 @@ namespace TheSpaceBetween
 
         [Tooltip("Colour of the entry prompt. Neutral, so it is not mistaken for the swap or a security warning.")]
         [SerializeField] private Color promptColor = new Color(0.8f, 0.82f, 0.8f, 0.9f);
+
+        [Tooltip("Font of the entry prompt. Empty means Unity's built-in font.")]
+        [SerializeField] private Font promptFont;
 
         //==================== CAMERA TRANSITION =====================
         [Header("Camera Transition")]
@@ -100,7 +102,7 @@ namespace TheSpaceBetween
         [Tooltip("Whether this point is being observed right now.")]
         [ReadOnly, SerializeField] private bool isObserving;
 
-        private TextMesh prompt;
+        private WorldPrompt prompt;
         private PlaceholderPlayerController player;
         private Swappable playerSwappable;
         private float enteredAt;
@@ -128,7 +130,7 @@ namespace TheSpaceBetween
         public string ExitPrompt => allowManualExit ? exitPrompt : string.Empty;
 
         /// <summary>The text the entry prompt shows right now, or empty when it is hidden.</summary>
-        public string PromptText => prompt != null && prompt.gameObject.activeSelf ? prompt.text : string.Empty;
+        public string PromptText => prompt != null && prompt.Visible ? prompt.Text : string.Empty;
 
         //==================== LIFECYCLE =====================
         private void Reset()
@@ -175,16 +177,20 @@ namespace TheSpaceBetween
             observeAction.performed -= OnObservePerformed;
             observeAction.Disable();
             Leave();
-            if (prompt != null)
-            {
-                prompt.gameObject.SetActive(false);
-            }
+            prompt?.HideNow();
         }
 
         private void Update()
         {
             isAvailable = CanEnter();
-            prompt.gameObject.SetActive(isAvailable);
+            if (isAvailable)
+            {
+                prompt.Text = WorldPrompt.Fill(interactionPrompt, "Observe", observeAction);
+            }
+
+            // Hidden while a menu, the "position lost" return or the ending covers the game.
+            prompt.Show(isAvailable && !GameplayHold.Active);
+            prompt.Tick();
 
             if (!isObserving)
             {
@@ -201,6 +207,11 @@ namespace TheSpaceBetween
         //==================== OBSERVING =====================
         private void OnObservePerformed(InputAction.CallbackContext context)
         {
+            if (GameplayHold.Active)
+            {
+                return;
+            }
+
             if (isObserving)
             {
                 if (allowManualExit)
@@ -249,26 +260,9 @@ namespace TheSpaceBetween
             return player != null && Vector3.Distance(player.transform.position, transform.position) <= interactionRadius + LeaveMargin;
         }
 
-        private TextMesh CreatePrompt()
+        private WorldPrompt CreatePrompt()
         {
-            var holder = new GameObject("Observe Prompt");
-            holder.transform.SetParent(transform, false);
-            holder.transform.localPosition = promptOffset;
-            holder.layer = LayerMask.NameToLayer("Ignore Raycast");
-
-            TextMesh text = holder.AddComponent<TextMesh>();
-            Font font = Resources.GetBuiltinResource<Font>(BuiltinFontName);
-            text.font = font;
-            holder.GetComponent<MeshRenderer>().sharedMaterial = font.material;
-            text.fontSize = PromptFontSize;
-            text.characterSize = promptSize;
-            text.anchor = TextAnchor.MiddleCenter;
-            text.alignment = TextAlignment.Center;
-            text.color = promptColor;
-            text.text = interactionPrompt;
-
-            holder.SetActive(false);
-            return text;
+            return new WorldPrompt(transform, "Observe Prompt", promptOffset, PromptFontSize, promptSize, promptColor, promptFont, TextAnchor.MiddleCenter);
         }
 
         //==================== GIZMOS =====================
