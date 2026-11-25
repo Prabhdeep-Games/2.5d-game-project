@@ -73,9 +73,14 @@ namespace TheSpaceBetween.Tests
             Assert.NotNull(guide, "The level needs its Tutorial Guide.");
             hintsSeen.Clear();
             // The session's sections are the rooms' Room Resets, in route order.
-            sections = Object.FindObjectsByType<RoomReset>(FindObjectsSortMode.None);
-            System.Array.Sort(sections, (a, b) => a.transform.position.x.CompareTo(b.transform.position.x));
-            Assert.AreEqual(8, sections.Length, "Every room should be a section.");
+            // The rooms in the order of the F keys, as the Playtest Session lists them.
+            var field = typeof(PlaytestSession).GetField("sections", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            sections = (RoomReset[])field.GetValue(session);
+            Assert.AreEqual(9, sections.Length, "Every room should be a section.");
+            foreach (RoomReset section in sections)
+            {
+                Assert.NotNull(section, "A section has lost its Room Reset.");
+            }
             yield return WaitSeconds(0.5f);
         }
 
@@ -228,7 +233,7 @@ namespace TheSpaceBetween.Tests
             ButtonControl[] keys =
             {
                 keyboard.f1Key, keyboard.f2Key, keyboard.f3Key, keyboard.f4Key,
-                keyboard.f5Key, keyboard.f6Key, keyboard.f7Key, keyboard.f8Key
+                keyboard.f5Key, keyboard.f6Key, keyboard.f7Key, keyboard.f8Key, keyboard.f9Key
             };
             yield return Tap(keys[index]);
             yield return WaitSeconds(0.5f);
@@ -242,6 +247,9 @@ namespace TheSpaceBetween.Tests
         public IEnumerator Room1_Arrival_JumpTheBarriers_AndThePanelOpensTheDoor()
         {
             yield return LoadScene();
+
+            // The designer moves the Player's start while building later rooms, so the test starts from room 1's entry.
+            yield return GoToSection(0);
             float x0 = Entry(0).x;
             AccessDoor door = sections[0].GetComponentInParent<GeneratedRoom>().GetComponentInChildren<AccessDoor>();
             ControlPanel panel = sections[0].GetComponentInParent<GeneratedRoom>().GetComponentInChildren<ControlPanel>();
@@ -454,27 +462,39 @@ namespace TheSpaceBetween.Tests
             Assert.Pass(report.ToString());
         }
 
+        private static Transform Marker(GeneratedRoom room, string name)
+        {
+            Transform marker = room.transform.Find($"Tutorial Marker ({name})");
+            Assert.NotNull(marker, $"{room.name} needs the marker '{name}'.");
+            return marker;
+        }
+
         [UnityTest]
-        public IEnumerator Room8_Finale_SwapOverTheGap_RideTheShuttle_AndTheElevatorToTheGoal()
+        public IEnumerator Room8_Elevator_SwapOverTheGap_JumpTheBarrier_RideTheShuttle_AndTheElevatorUp()
         {
             yield return LoadScene();
             yield return GoToSection(7);
             GeneratedRoom room = sections[7].GetComponentInParent<GeneratedRoom>();
-            float roomX = room.transform.position.x;
             float floor = room.transform.position.y;
             Swappable beacon = Find<Swappable>("Swap Beacon (over the gap)");
             MovingPlatform shuttle = Find<MovingPlatform>("Moving Platform (over the gap)");
             MovingPlatform lift = Find<MovingPlatform>("Elevator");
-            LevelGoal goal = Object.FindAnyObjectByType<LevelGoal>();
+            Transform barrier = null;
+            foreach (Transform t in room.GetComponentsInChildren<Transform>())
+            {
+                if (t.name == "Low Barrier")
+                {
+                    barrier = t;
+                }
+            }
+
+            Assert.NotNull(barrier);
             var report = new StringBuilder();
 
             // Gap 1, with glass over it: jump, swap to the beacon in the air, land beyond.
-            float gapStart = roomX + 16.5f;
-            float gapEnd = roomX + 23f;
-            // The hall's low barrier first.
+            float gapStart = Marker(room, "first gap").position.x;
+            float gapEnd = Marker(room, "past the first gap").position.x - 0.5f;
             yield return HoldRun();
-            yield return WaitUntil(() => X >= roomX + 7f - 2.2f, 3f);
-            yield return Tap(keyboard.wKey);
             yield return WaitUntil(() => X >= gapStart - 1.2f, 5f);
             yield return Tap(keyboard.wKey);
             yield return WaitSeconds(0.15f);
@@ -482,34 +502,93 @@ namespace TheSpaceBetween.Tests
             Assert.AreEqual(SwapRejection.None, ability.LastResult, $"The beacon should be in range mid-jump. At {player.transform.position}");
             yield return WaitUntil(() => controller.IsGrounded, 2f);
             Assert.IsTrue(StandingAbove(floor) && X > gapEnd, $"The swap should carry the player over the gap. At {player.transform.position}");
-            yield return ReleaseAll();
             report.Append($"over gap 1 to x {X:F1}; ");
 
-            // Gap 2: wait for the shuttle at the near side, ride it, step off.
-            float gap2Start = roomX + 36f;
+            // The low barrier, then gap 2: wait for the shuttle at the near side, ride it, step off.
+            yield return HoldRun();
+            yield return WaitUntil(() => X >= barrier.position.x - 2.2f, 4f);
+            yield return Tap(keyboard.wKey);
+            float gap2Start = shuttle.transform.position.x - 1.5f;
+            yield return WaitUntil(() => X >= barrier.position.x + 1f, 3f);
+            yield return ReleaseAll();
             yield return WalkTo(gap2Start - 1f);
+            Assert.IsTrue(StandingAbove(floor), $"Over the barrier and before the second gap. At {player.transform.position}");
             yield return WaitUntil(() => shuttle.Progress <= 0.01f, 8f);
             yield return WalkTo(gap2Start + 1.2f);
             Assert.IsTrue(controller.IsGrounded && Y > floor, $"The player should stand on the shuttle. At {player.transform.position}");
             yield return WaitUntil(() => shuttle.Progress >= 0.99f, 8f);
-            yield return WalkTo(roomX + 43.3f);
-            Assert.IsTrue(StandingAbove(floor), $"The shuttle should carry the player across. At {player.transform.position}");
+            yield return WalkTo(lift.transform.position.x - 0.2f);
+            Assert.IsTrue(X >= lift.transform.position.x - 1.5f && Y > floor + 0.9f, $"The shuttle should carry the player across to the elevator, not into the gap. At {player.transform.position}");
             report.Append($"shuttle to x {X:F1}; ");
 
-            // The elevator: stand on its pad, ride up, step onto the ledge and into the goal.
-            yield return WalkTo(lift.transform.position.x - 0.2f);
+            // The elevator: stand on its pad, ride up, step onto the ledge.
             yield return WaitUntil(() => lift.Progress >= 1f, 8f);
             Assert.GreaterOrEqual(lift.Progress, 1f, $"The pad should raise the elevator. At {player.transform.position}");
-            yield return WalkTo(goal.transform.position.x);
-            yield return WaitUntil(() => goal.Reached, 3f);
-            Assert.IsTrue(goal.Reached, $"The ledge should hold the goal. At {player.transform.position}");
+            yield return WalkTo(lift.transform.position.x + 3f);
+            float ledgeY = Marker(room, "on the goal ledge").position.y;
+            Assert.IsTrue(controller.IsGrounded && Y >= ledgeY, $"The elevator should lift the player onto the ledge. At {player.transform.position}");
             yield return WaitSeconds(0.6f);
             AssertHintSeenAndCleared("Mid-air swap");
             AssertHintSeenAndCleared("Elevator");
+            report.Append($"on the ledge at {player.transform.position}");
+            Assert.Pass(report.ToString());
+        }
+
+        [UnityTest]
+        public IEnumerator Room9_DoubleJump_TheHintShows_AndJumpAfterASwapCrossesTheFirstGap()
+        {
+            yield return LoadScene();
+            yield return GoToSection(8);
+            GeneratedRoom room = sections[8].GetComponentInParent<GeneratedRoom>();
+            float floor = room.transform.position.y;
+            float gapStart = Marker(room, "first gap").position.x;
+            float gapEnd = Marker(room, "past the first gap").position.x - 0.5f;
+            Swappable beacon = null;
+            foreach (Swappable candidate in room.GetComponentsInChildren<Swappable>())
+            {
+                if (candidate.Position.x > gapStart && candidate.Position.x < gapEnd)
+                {
+                    beacon = candidate;
+                }
+            }
+
+            Assert.NotNull(beacon, "Room 9 needs a beacon over its first gap.");
+            yield return WaitUntil(() => guide.CurrentHint == "Double Jump", 4f);
+            Assert.AreEqual("Double Jump", guide.CurrentHint, $"The hint shows on the way to the first gap. At {player.transform.position}");
+            yield return WaitSeconds(0.4f);
+            StringAssert.Contains("Press W again after a swap", guide.CurrentHintText);
+
+            // Jump at the edge, swap to the beacon in the air, then jump again from there.
+            yield return HoldRun();
+            yield return WaitUntil(() => X >= gapStart - 1.2f, 5f);
+            yield return Tap(keyboard.wKey);
+            yield return WaitSeconds(0.15f);
+            yield return AimAndSwap(beacon);
+            Assert.AreEqual(SwapRejection.None, ability.LastResult, $"The beacon should be in range mid-jump. At {player.transform.position}");
+            yield return Tap(keyboard.wKey);
+            yield return WaitUntil(() => controller.IsGrounded, 3f);
+            yield return ReleaseAll();
+            Assert.IsTrue(StandingAbove(floor) && X > gapEnd, $"The swap and the second jump should cross the gap. At {player.transform.position}");
+            yield return WaitSeconds(0.6f);
+            AssertHintSeenAndCleared("Double Jump");
+            Assert.Pass($"over the first gap to {player.transform.position}; hints {HintsSeen}");
+        }
+
+        [UnityTest]
+        public IEnumerator Goal_ShowsTheClosingLine_AndNoHint()
+        {
+            yield return LoadScene();
+            LevelGoal goal = Object.FindAnyObjectByType<LevelGoal>();
+            CharacterController body = player.GetComponent<CharacterController>();
+            body.enabled = false;
+            player.transform.position = goal.transform.position;
+            body.enabled = true;
+            Physics.SyncTransforms();
+            yield return WaitUntil(() => goal.Reached, 2f);
+            yield return WaitSeconds(0.6f);
+            Assert.IsTrue(goal.Reached, "The goal should register the player.");
             Assert.IsTrue(guide.EndVisible, "The closing line shows at the goal.");
             Assert.IsNull(guide.CurrentHintText, "No hint stays up at the goal.");
-            report.Append($"goal at {player.transform.position}");
-            Assert.Pass(report.ToString());
         }
 
         //==================== TUTORIAL GUIDANCE =====================
@@ -571,7 +650,7 @@ namespace TheSpaceBetween.Tests
             StringAssert.Contains("A / D  move", start);
             StringAssert.Contains("Left Shift  run", start);
             StringAssert.Contains("W  jump", start);
-            StringAssert.Contains("E  use a panel", start);
+            StringAssert.Contains("E  use", start);
             StringAssert.Contains("R  restart the room", start);
             StringAssert.Contains("Mouse  aim", swapSign);
             StringAssert.Contains(kb("Swap") + "  swap places", swapSign);
@@ -593,16 +672,15 @@ namespace TheSpaceBetween.Tests
             yield return null;
             Assert.AreEqual(TutorialGuide.InputDevice.KeyboardMouse, guide.ActiveDevice, "Back to the keyboard.");
             StringAssert.Contains("W  jump", guide.SignText(0));
-            Assert.Pass(start.Replace("
-", " / ") + " | " + swapSign.Replace("
-", " / "));
+            Assert.Pass(start.Replace((char)10, ' ') + " | " + swapSign);
         }
 
         [UnityTest]
         public IEnumerator Tutorial_OpensWithTheObjective_ThenTheFirstHint_AndTheControlsLeaveAfterTheFirstRoom()
         {
             yield return LoadScene();
-            Assert.AreEqual("Intro", guide.CurrentHint, "The objective comes first.");
+            yield return GoToSection(0);
+            Assert.AreEqual("Intro", guide.CurrentHint, "The objective comes first in the first room.");
             yield return WaitSeconds(0.5f);
             StringAssert.Contains("Reach the end of the facility", guide.CurrentHintText);
             yield return WaitSeconds(7f);
