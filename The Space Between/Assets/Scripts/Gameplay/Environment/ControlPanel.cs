@@ -126,6 +126,9 @@ namespace TheSpaceBetween
         [Tooltip("World Z of the cables. Slightly behind the player (z 0), so they read as part of the building.")]
         [SerializeField] private float wireDepth = 1.2f;
 
+        [Tooltip("Where the cables leave the panel, for example where the wires painted on the model end. Empty means the panel's pivot.")]
+        [SerializeField] private Transform wireOrigin;
+
         //==================== EVENTS =====================
         [Header("Events")]
         [Tooltip("Invoked when the panel switches on.")]
@@ -292,7 +295,7 @@ namespace TheSpaceBetween
             CaptureStartPower();
             if (showWires)
             {
-                wires.Build(transform, targets, wireMaterial, wireWidth, wireDepth);
+                wires.Build(wireOrigin != null ? wireOrigin : transform, targets, wireMaterial, wireWidth, wireDepth);
             }
 
             ShowState();

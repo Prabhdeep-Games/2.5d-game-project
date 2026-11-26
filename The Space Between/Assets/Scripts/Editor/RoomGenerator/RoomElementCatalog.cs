@@ -97,7 +97,9 @@ namespace TheSpaceBetween.EditorTools
             new Entry { Category = Category.LevelFlow, Name = "Observation Point", Path = Level + "Observation Point.prefab", Placement = Placement.PivotOnFloor, HeightOffset = 1f,
                 Description = "Press E near it to look from its Camera Anchor at its Look Target. Move those two children to frame the view. Needs an Observation Camera Controller in the scene." },
             new Entry { Category = Category.LevelFlow, Name = "Level Goal", Path = Level + "Level Goal.prefab", Placement = Placement.Floor,
-                Description = "Ends the level when the player enters its box." }
+                Description = "Ends the level when the player enters its box." },
+            new Entry { Category = Category.LevelFlow, Name = "Exterior", Path = "Assets/Prefabs/Architecture/Exterior.prefab", Placement = Placement.PivotOnFloor,
+                Description = "The outside: a 110 m walkway leaving the building along the facility's face, piers into the fog, the facility beyond. Its pivot is the walkway's start; move it to a room's open exit. Sky, fog and light are scene settings (see L08_Exterior)." }
         };
 
         /// <summary>Categories that make puzzles rather than movement, shown first in a puzzle level.</summary>
