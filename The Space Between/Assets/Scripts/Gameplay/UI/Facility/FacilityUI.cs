@@ -30,6 +30,7 @@ namespace TheSpaceBetween
         {
             public string Message;
             public int Room = -1;
+            public bool Bright;
         }
 
         private sealed class Fade
@@ -52,8 +53,15 @@ namespace TheSpaceBetween
         [Tooltip("The main menu scene. Must be in Build Settings.")]
         [SerializeField] private string menuScene = "MainMenu";
 
-        [Tooltip("The level New Game and Continue load. Must be in Build Settings.")]
-        [SerializeField] private string gameScene = "Final_Playtest";
+        [Tooltip("The first level, which New Game loads. Must be in Build Settings.")]
+        [SerializeField] private string gameScene = "L01_TestingChamber";
+
+        [Tooltip("The levels in play order. Continue starts at the furthest of them reached; a scene not listed here only saves when there is no other progress.")]
+        [SerializeField] private string[] levelOrder =
+        {
+            "L01_TestingChamber", "L02_ResearchFacility", "L03_ObservationSection", "L04_ContainmentWing",
+            "L05_ContainmentBreach", "L06_CentralCore", "L07_Ascent", "L08_Exterior"
+        };
 
         //==================== GAMEPLAY =====================
         [Header("Gameplay")]
@@ -172,6 +180,7 @@ namespace TheSpaceBetween
         private bool leaving;
         private bool ending;
         private bool arriving;
+        private bool cutscene;
         private bool locked;
         private bool controlLockedBefore;
         private bool swapEnabledBefore;
@@ -186,6 +195,9 @@ namespace TheSpaceBetween
         public bool IsReturning => failing;
         public bool IsLeaving => leaving;
         public bool IsEnding => ending;
+
+        /// <summary>True while a level's own short sequence (the wake-up, a cutscene) holds the player.</summary>
+        public bool IsCutscene => cutscene;
 
         /// <summary>The name of the screen on top, or null when none is open.</summary>
         public string TopScreen => stack.Count > 0 ? stack[stack.Count - 1].Name : null;
@@ -263,7 +275,7 @@ namespace TheSpaceBetween
             if (arrival != null)
             {
                 arriving = true;
-                SetLoadingVisible(arrival.Message, 1f);
+                SetLoadingVisible(arrival.Message, 1f, arrival.Bright);
             }
         }
 
@@ -451,7 +463,7 @@ namespace TheSpaceBetween
         //==================== PAUSE =====================
         private bool CanPause()
         {
-            return allowPause && player != null && !paused && !failing && !leaving && !ending && !arriving;
+            return allowPause && player != null && !paused && !failing && !leaving && !ending && !arriving && !cutscene;
         }
 
         public void OpenPause()
@@ -464,7 +476,7 @@ namespace TheSpaceBetween
             paused = true;
             timeScaleBefore = Time.timeScale > 0f ? Time.timeScale : 1f;
             Time.timeScale = 0f;
-            LockGameplay(true);
+            ApplyLock();
             SetLook(-0.7f, -1.1f, 0f, 0.4f, 1f);
             if (pauseScreen == null)
             {
@@ -487,7 +499,7 @@ namespace TheSpaceBetween
             GameSettings.Save();
             paused = false;
             Time.timeScale = timeScaleBefore;
-            LockGameplay(false);
+            ApplyLock();
             SetLook(0f, 0f, 0f, 0.35f, 0f);
             ConsumeInput();
             SetState("Idle");
@@ -513,6 +525,7 @@ namespace TheSpaceBetween
         public void NewGame()
         {
             GameProgress.Clear();
+            NarrativeFlags.ClearAll();
             LoadScene(gameScene, newGameMessage, 0);
         }
 
@@ -521,7 +534,7 @@ namespace TheSpaceBetween
         {
             if (GameProgress.HasSave)
             {
-                LoadScene(gameScene, continueMessage, GameProgress.Room);
+                LoadScene(GameProgress.Scene, continueMessage, GameProgress.Room);
             }
         }
 
@@ -536,9 +549,24 @@ namespace TheSpaceBetween
 #endif
         }
 
-        // Stops the player and the swap the same way observation does, and remembers what to give back.
-        private void LockGameplay(bool on)
+        /// <summary>
+        /// Holds or releases the player for a level's own sequence, such as the wake-up or a cutscene. The interface
+        /// treats it like the ending: no pause, no "position lost" return, control locked.
+        /// </summary>
+        public void SetCutscene(bool on)
         {
+            cutscene = on;
+            ApplyLock();
+        }
+
+        /// <summary>Where a scene sits in the level order, or -1 when it is not one of the levels.</summary>
+        public int LevelIndexOf(string scene) => System.Array.IndexOf(levelOrder, scene);
+
+        // Stops the player and the swap the same way observation does, and remembers what to give back. One rule for
+        // every reason, so the end of one (a "position lost" return) can never release another (the ending).
+        private void ApplyLock()
+        {
+            bool on = paused || failing || leaving || ending || arriving || cutscene;
             if (on == locked)
             {
                 UpdateHold();
@@ -592,7 +620,7 @@ namespace TheSpaceBetween
 
         private void UpdateHold()
         {
-            bool held = paused || failing || leaving || ending || arriving;
+            bool held = paused || failing || leaving || ending || arriving || cutscene;
             GameplayHold.Active = held;
             TutorialGuide.HiddenByInterface = held;
         }
@@ -606,7 +634,7 @@ namespace TheSpaceBetween
                 return true;
             }
 
-            if (paused || leaving || ending || !isActiveAndEnabled)
+            if (paused || leaving || ending || cutscene || !isActiveAndEnabled)
             {
                 return false;
             }
@@ -618,7 +646,7 @@ namespace TheSpaceBetween
         private IEnumerator ReturnToRoom(RoomReset room, bool afterHazard)
         {
             failing = true;
-            LockGameplay(true);
+            ApplyLock();
             float darken = afterHazard ? darkenSeconds : checkpointFadeSeconds;
             if (afterHazard)
             {
@@ -650,7 +678,7 @@ namespace TheSpaceBetween
             FadeTo(fader, 0f, back);
             SetLook(0f, 0f, 0f, back, 0f);
             failing = false;
-            LockGameplay(false);
+            ApplyLock();
             SetState("Idle");
             if (logActions)
             {
@@ -707,7 +735,8 @@ namespace TheSpaceBetween
                     lastRoom = sections[i];
                     if (recordProgress && !leaving)
                     {
-                        GameProgress.Record(i);
+                        string scene = gameObject.scene.name;
+                        GameProgress.Record(scene, LevelIndexOf(scene), i);
                     }
 
                     return;
@@ -716,23 +745,26 @@ namespace TheSpaceBetween
         }
 
         //==================== LOADING =====================
-        /// <summary>Loads a scene behind the loading screen. Room puts the player at the start of that section (-1: the scene's own start).</summary>
-        public void LoadScene(string scene, string message, int room)
+        /// <summary>
+        /// Loads a scene behind the loading screen. Room puts the player at the start of that section (-1: the scene's
+        /// own start). Bright uses the pale version of the screen, for stepping out into daylight.
+        /// </summary>
+        public void LoadScene(string scene, string message, int room, bool bright = false)
         {
             if (leaving)
             {
                 return;
             }
 
-            StartCoroutine(Leave(scene, message, room));
+            StartCoroutine(Leave(scene, message, room, bright));
         }
 
-        private IEnumerator Leave(string scene, string message, int room)
+        private IEnumerator Leave(string scene, string message, int room, bool bright)
         {
             leaving = true;
-            LockGameplay(true);
+            ApplyLock();
             SetState($"Loading {scene}");
-            SetLoadingVisible(message, 0f);
+            SetLoadingVisible(message, 0f, bright);
             loadingLayer.style.opacity = 0f;
             FadeTo(loadingLayer, 1f, 0.4f);
             yield return WaitReal(0.45f);
@@ -741,7 +773,7 @@ namespace TheSpaceBetween
             GameSettings.Save();
             Time.timeScale = 1f;
             paused = false;
-            arrival = new Arrival { Message = message, Room = room };
+            arrival = new Arrival { Message = message, Room = room, Bright = bright };
             if (logActions)
             {
                 Debug.Log($"[{nameof(FacilityUI)}] Loading '{scene}'.", this);
@@ -754,7 +786,7 @@ namespace TheSpaceBetween
                 arrival = null;
                 leaving = false;
                 FadeTo(loadingLayer, 0f, 0.3f);
-                LockGameplay(false);
+                ApplyLock();
                 yield break;
             }
 
@@ -775,7 +807,7 @@ namespace TheSpaceBetween
             }
 
             Arrival here = arrival;
-            LockGameplay(true);
+            ApplyLock();
             yield return null;
             if (here.Room >= 0 && session != null && here.Room < session.Sections.Count && session.Sections[here.Room] != null)
             {
@@ -787,12 +819,13 @@ namespace TheSpaceBetween
             yield return WaitReal(0.3f);
             arrival = null;
             arriving = false;
-            LockGameplay(false);
+            ApplyLock();
             FadeTo(loadingLayer, 0f, 0.6f);
         }
 
-        private void SetLoadingVisible(string message, float progress)
+        private void SetLoadingVisible(string message, float progress, bool bright)
         {
+            loadingLayer.EnableInClassList("is-bright", bright);
             loadingLayer.style.display = DisplayStyle.Flex;
             loadingLayer.style.opacity = 1f;
             loadingMessage.text = message;
@@ -814,13 +847,14 @@ namespace TheSpaceBetween
                 return false;
             }
 
+            cutscene = false;
             if (paused)
             {
                 Resume();
             }
 
             ending = true;
-            LockGameplay(true);
+            ApplyLock();
             SetState("Ending");
             return true;
         }
@@ -856,6 +890,15 @@ namespace TheSpaceBetween
             fader.style.opacity = 1f;
             FadeTo(fader, 0f, seconds);
         }
+
+        /// <summary>Takes the view to black: 0 seconds is a hard cut. FadeFromDark brings it back.</summary>
+        public void FadeToDark(float seconds)
+        {
+            FadeTo(fader, 1f, seconds);
+        }
+
+        /// <summary>How dark the view is from the fader: 0 clear, 1 black.</summary>
+        public float Darkness => fader != null && fader.style.display.value != DisplayStyle.None ? fader.style.opacity.value : 0f;
 
         public void HideMessage(float seconds)
         {

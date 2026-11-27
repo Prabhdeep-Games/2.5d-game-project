@@ -215,7 +215,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: TheSpaceBetween.Runtime::TheSpaceBetween.FacilityUI
   styleSheet: {fileID: 7433441132597879392, guid: 11a05ba97fa222a4e86a868e7d6b8e6a, type: 3}
   menuScene: MainMenu
-  gameScene: Final_Playtest
+  gameScene: L00_Opening
+  levelOrder:
+  - L00_Opening
+  - L01_TestingChamber
+  - L02_ResearchFacility
+  - L03_ObservationSection
+  - L04_ContainmentWing
+  - L05_ContainmentBreach
+  - L06_CentralCore
+  - L07_Ascent
+  - L08_Exterior
   allowPause: 1
   recordProgress: 1
   positionLostOnHazard: 1

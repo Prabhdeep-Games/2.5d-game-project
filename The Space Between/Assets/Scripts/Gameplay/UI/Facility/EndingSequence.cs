@@ -25,6 +25,9 @@ namespace TheSpaceBetween
         [Tooltip("Music that fades in with the ending. Optional.")]
         [SerializeField] private AudioChannel music;
 
+        [Tooltip("Start when the player reaches the goal. Off when another sequence (such as the drone strike) starts the ending by calling Begin.")]
+        [SerializeField] private bool startOnGoal = true;
+
         //==================== TEXT =====================
         [Header("Text")]
         [SerializeField] private string title = "THE SPACE BETWEEN";
@@ -75,17 +78,28 @@ namespace TheSpaceBetween
 
         private void Update()
         {
-            if (!started && goal != null && goal.Reached)
+            if (startOnGoal && !started && goal != null && goal.Reached)
             {
-                started = true;
-                StartCoroutine(Play());
+                Begin();
             }
+        }
+
+        /// <summary>Starts the ending now. Does nothing if it has already started.</summary>
+        public void Begin()
+        {
+            if (started)
+            {
+                return;
+            }
+
+            started = true;
+            StartCoroutine(Play());
         }
 
         private IEnumerator Play()
         {
             FacilityUI ui = FacilityUI.Current;
-            if (ui == null || !ui.BeginEnding())
+            if (ui == null || (!ui.IsEnding && !ui.BeginEnding()))
             {
                 stage = "No Facility UI";
                 yield break;

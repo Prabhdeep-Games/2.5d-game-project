@@ -375,6 +375,20 @@
     background-color: rgb(181, 111, 67);
 }
 
+/* Stepping out into daylight: the same screen, pale. */
+.fui-loading.is-bright {
+    background-color: rgb(196, 199, 194);
+}
+
+.fui-loading.is-bright .fui-loading-title,
+.fui-loading.is-bright .fui-loading-message {
+    color: rgb(74, 82, 86);
+}
+
+.fui-loading.is-bright .fui-loading-track {
+    background-color: rgba(37, 45, 50, 0.2);
+}
+
 .fui-loading-message {
     -unity-font: url("project://database/Assets/Fonts/IBMPlexSansCondensed-Regular.ttf");
     margin-top: 24px;

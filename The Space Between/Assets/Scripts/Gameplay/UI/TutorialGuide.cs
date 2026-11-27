@@ -41,7 +41,17 @@ namespace TheSpaceBetween
         {
             Never,
             PastX,
-            AboveY
+            AboveY,
+            ActionPerformed
+        }
+
+        /// <summary>A player action that can end a hint once it has been performed.</summary>
+        public enum PlayerAction
+        {
+            Move,
+            Run,
+            Slide,
+            Jump
         }
 
         /// <summary>One line of contextual guidance.</summary>
@@ -66,11 +76,20 @@ namespace TheSpaceBetween
             [Tooltip("Optional: the hint shows only while this camera has raised its alarm.")]
             public SecurityCamera onlyWhileAlarmed;
 
-            [Tooltip("When the hint is done for good: once the player passes Done At along X, or rises above it.")]
+            [Tooltip("When the hint is done for good: once the player passes Done At along X, rises above it, or performs the action.")]
             public DoneRule doneRule = DoneRule.PastX;
 
             [Tooltip("The point that ends the hint.")]
             public Transform doneAt;
+
+            [Tooltip("With Action Performed: the action that ends the hint once the player has done it.")]
+            public PlayerAction action;
+
+            [Tooltip("Optional: the hint shows only once the player has passed this point along X.")]
+            public Transform showFrom;
+
+            [Tooltip("Hide the hint while one of its keys has no binding on the device in use, instead of showing \"not set\".")]
+            public bool hideWhenKeyMissing;
 
             [Tooltip("Uses the security amber accent instead of the usual text colour.")]
             public bool security;
@@ -161,6 +180,7 @@ namespace TheSpaceBetween
         private string wantedHint;
         private bool hintIsSecurity;
         private readonly Dictionary<RoomReset, System.Action> resetListeners = new Dictionary<RoomReset, System.Action>();
+        private int jumpedFrame = -10;
 
         //==================== READ ACCESS =====================
         /// <summary>True while a Facility UI screen or sequence covers the game; the hints stay hidden until it ends.</summary>
@@ -223,6 +243,11 @@ namespace TheSpaceBetween
 
         private void OnEnable()
         {
+            if (player != null)
+            {
+                player.Jumped += OnJumped;
+            }
+
             foreach (Hint hint in hints)
             {
                 RoomReset room = hint.room;
@@ -237,6 +262,11 @@ namespace TheSpaceBetween
 
         private void OnDisable()
         {
+            if (player != null)
+            {
+                player.Jumped -= OnJumped;
+            }
+
             foreach (KeyValuePair<RoomReset, System.Action> pair in resetListeners)
             {
                 if (pair.Key != null)
@@ -251,6 +281,11 @@ namespace TheSpaceBetween
         private void Start()
         {
             startTime = Time.unscaledTime;
+        }
+
+        private void OnJumped(bool fromWall)
+        {
+            jumpedFrame = Time.frameCount;
         }
 
         // A restarted room teaches again from the start; its hints are re-checked from the player's new place next frame.
@@ -336,14 +371,29 @@ namespace TheSpaceBetween
                     continue;
                 }
 
+                if (hint.showFrom != null && at.x < hint.showFrom.position.x)
+                {
+                    continue;
+                }
+
+                if (hint.hideWhenKeyMissing && Fill(hint.text, device, keyColor).Contains(NotSet))
+                {
+                    continue;
+                }
+
                 return hint;
             }
 
             return null;
         }
 
-        private static bool IsDone(Hint hint, Vector3 at)
+        private bool IsDone(Hint hint, Vector3 at)
         {
+            if (hint.doneRule == DoneRule.ActionPerformed)
+            {
+                return Performed(hint.action);
+            }
+
             if (hint.doneAt == null)
             {
                 return false;
@@ -357,6 +407,27 @@ namespace TheSpaceBetween
                     return at.y >= hint.doneAt.position.y;
                 default:
                     return false;
+            }
+        }
+
+        // Whether the player is doing the action right now, with the controls in their hands (not in a cutscene).
+        private bool Performed(PlayerAction action)
+        {
+            if (player == null || !player.isActiveAndEnabled || player.ControlLocked || HiddenByInterface)
+            {
+                return false;
+            }
+
+            switch (action)
+            {
+                case PlayerAction.Move:
+                    return player.MoveAction.enabled && Mathf.Abs(player.MoveAction.ReadValue<float>()) > 0.5f && player.Speed > 1f;
+                case PlayerAction.Run:
+                    return player.IsRunning && player.IsGrounded && player.Speed > 6.5f;
+                case PlayerAction.Slide:
+                    return player.IsSliding;
+                default:
+                    return Time.frameCount - jumpedFrame <= 1;
             }
         }
 
