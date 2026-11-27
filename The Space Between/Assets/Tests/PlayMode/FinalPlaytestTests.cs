@@ -19,7 +19,11 @@ namespace TheSpaceBetween.Tests
     {
         private const string SceneName = "Final_Playtest";
         private const string MenuScene = "MainMenu";
-        private const string ProgressKey = "TheSpaceBetween.Progress.Room";
+        private const string FirstLevel = "L00_Opening";
+        private static readonly string[] ProgressKeys =
+        {
+            "TheSpaceBetween.Progress.Scene", "TheSpaceBetween.Progress.Level", "TheSpaceBetween.Progress.Room", "TheSpaceBetween.Progress.Flags"
+        };
         private const float StandingHeight = 1.08f;
         private const int AimFrames = 3;
         private const float SwapWaitLimitSeconds = 3f;
@@ -35,14 +39,21 @@ namespace TheSpaceBetween.Tests
         private RoomReset[] sections;
         private TutorialGuide guide;
         private readonly System.Collections.Generic.List<string> hintsSeen = new System.Collections.Generic.List<string>();
-        private int savedProgress;
+        private readonly System.Collections.Generic.Dictionary<string, string> savedProgress = new System.Collections.Generic.Dictionary<string, string>();
 
         public override void Setup()
         {
             base.Setup();
 
             // The tests play through rooms and the menu, which saves progress; the developer's own save is put back after.
-            savedProgress = PlayerPrefs.GetInt(ProgressKey, int.MinValue);
+            savedProgress.Clear();
+            foreach (string key in ProgressKeys)
+            {
+                if (PlayerPrefs.HasKey(key))
+                {
+                    savedProgress[key] = key.EndsWith("Level") || key.EndsWith("Room") ? "i" + PlayerPrefs.GetInt(key) : "s" + PlayerPrefs.GetString(key);
+                }
+            }
             InputSystem.settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
             InputSystem.settings.editorInputBehaviorInPlayMode = InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
             keyboard = InputSystem.AddDevice<Keyboard>();
@@ -53,31 +64,36 @@ namespace TheSpaceBetween.Tests
         public IEnumerator UnloadScene()
         {
             Time.timeScale = 1f;
-            if (savedProgress == int.MinValue)
+            foreach (string key in ProgressKeys)
             {
-                PlayerPrefs.DeleteKey(ProgressKey);
-            }
-            else
-            {
-                PlayerPrefs.SetInt(ProgressKey, savedProgress);
+                PlayerPrefs.DeleteKey(key);
+                if (savedProgress.TryGetValue(key, out string value))
+                {
+                    if (value[0] == 'i')
+                    {
+                        PlayerPrefs.SetInt(key, int.Parse(value.Substring(1)));
+                    }
+                    else
+                    {
+                        PlayerPrefs.SetString(key, value.Substring(1));
+                    }
+                }
             }
 
-            Scene level = SceneManager.GetSceneByName(SceneName);
-            Scene menu = SceneManager.GetSceneByName(MenuScene);
-            if (!level.isLoaded && !menu.isLoaded)
+            // Whatever the test ended in (the level, the menu, the first story level), unload it.
+            var loaded = new System.Collections.Generic.List<Scene>();
+            for (int i = 0; i < SceneManager.sceneCount; i++)
             {
-                yield break;
+                loaded.Add(SceneManager.GetSceneAt(i));
             }
 
             SceneManager.SetActiveScene(SceneManager.CreateScene("Empty After Final Playtest"));
-            if (level.isLoaded)
+            foreach (Scene scene in loaded)
             {
-                yield return SceneManager.UnloadSceneAsync(level);
-            }
-
-            if (menu.isLoaded)
-            {
-                yield return SceneManager.UnloadSceneAsync(menu);
+                if (scene.isLoaded)
+                {
+                    yield return SceneManager.UnloadSceneAsync(scene);
+                }
             }
         }
 
@@ -794,7 +810,7 @@ namespace TheSpaceBetween.Tests
             Assert.IsNull(ui.MessageText, "Nothing stays on screen.");
         }
 
-        [UnityTest]
+        [UnityTest, Timeout(150000)]
         public IEnumerator MainMenu_ContinueNeedsASave_NewGameStartsAtRoom1_AndTheMenuOffersContinueAfter()
         {
             GameProgress.Clear();
@@ -816,13 +832,18 @@ namespace TheSpaceBetween.Tests
             Assert.IsTrue(ui.Choose("New Game"));
             yield return null;
             Assert.IsTrue(ui.LoadingVisible, "New Game shows the loading screen.");
-            yield return WaitUntil(() => SceneManager.GetActiveScene().name == SceneName, 10f);
+            yield return WaitUntil(() => SceneManager.GetActiveScene().name == FirstLevel, 10f);
             yield return WaitUntil(() => FacilityUI.Current != null && !FacilityUI.Current.LoadingVisible, 5f);
-            Assert.AreEqual(SceneName, SceneManager.GetActiveScene().name);
-            GatherReferences();
-            Assert.AreEqual(Entry(0).x, X, 0.4f, "New Game starts at the first room.");
-            Assert.AreEqual(0, GameProgress.Room, "Progress is saved from the first room.");
+            Assert.AreEqual(FirstLevel, SceneManager.GetActiveScene().name, "New Game starts the first level.");
+            var levelPlayer = Object.FindAnyObjectByType<PlaceholderPlayerController>();
+            Assert.Less(levelPlayer.transform.position.x, 8f, "New Game starts in the first room of the first level.");
+            yield return WaitSeconds(0.3f);
+            Assert.AreEqual(FirstLevel, GameProgress.Scene, "Progress is saved from the first level.");
+            Assert.AreEqual(0, GameProgress.Room, "Progress is saved from its first room.");
 
+            // The opening cinematic cannot be paused; the pause menu is there once it hands control over.
+            var opening = Object.FindAnyObjectByType<OpeningSequence>();
+            yield return WaitUntil(() => opening.Finished, 60f);
             ui = FacilityUI.Current;
             yield return Tap(keyboard.escapeKey);
             Assert.IsTrue(ui.Choose("Main Menu"));

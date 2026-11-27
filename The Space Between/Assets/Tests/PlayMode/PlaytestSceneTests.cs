@@ -20,7 +20,9 @@ namespace TheSpaceBetween.Tests
     public class PlaytestSceneTests : InputTestFixture
     {
         private const string SceneName = "Playtest_Full";
-        private const float StandingHeight = 1.08f;
+        // The player's root above the floor when standing: half the 2 m capsule, less its 0.11 centre (raised 26 Nov so
+        // the boots touch the floor), plus the 0.08 skin width.
+        private const float StandingHeight = 0.97f;
         private const float SwapWaitLimitSeconds = 3f;
         private const float CameraProbeRadius = 0.2f;
         private const float BlendSeconds = 1f;

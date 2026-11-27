@@ -9,15 +9,42 @@ EditorBuildSettings:
     path: Assets/Scenes/MainMenu.unity
     guid: 796ecbf067cce704d9dd4ce4650d524f
   - enabled: 1
+    path: Assets/Scenes/Final Levels/L00_Opening.unity
+    guid: 35e2e3b3dc5666544bf0b852fcb11790
+  - enabled: 1
+    path: Assets/Scenes/Final Levels/L01_TestingChamber.unity
+    guid: ea166c4c8afd1424dbd617c5de051b73
+  - enabled: 1
+    path: Assets/Scenes/Final Levels/L02_ResearchFacility.unity
+    guid: a8ab5048f5c545f488f2ec46e3d69266
+  - enabled: 1
+    path: Assets/Scenes/Final Levels/L03_ObservationSection.unity
+    guid: 3b24c26f43287cf44819cd22849c2aa8
+  - enabled: 1
+    path: Assets/Scenes/Final Levels/L04_ContainmentWing.unity
+    guid: 54c527b077c0b6f48a88e036e8cf1124
+  - enabled: 1
+    path: Assets/Scenes/Final Levels/L05_ContainmentBreach.unity
+    guid: 907ef4c606573a94da827eb993edd377
+  - enabled: 1
+    path: Assets/Scenes/Final Levels/L06_CentralCore.unity
+    guid: 146a7ac6d1886074aae3cd55552e733c
+  - enabled: 1
+    path: Assets/Scenes/Final Levels/L07_Ascent.unity
+    guid: 301138528e4907b4b82c5d5b8c63da5b
+  - enabled: 1
+    path: Assets/Scenes/Final Levels/L08_Exterior.unity
+    guid: 6902fb9b027fc4546b893a2514fb91eb
+  - enabled: 0
     path: Assets/Scenes/Environment_Elements.unity
     guid: abaa1a1a1e5669046b077d1577c2cf8f
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/Observation_Chamber.unity
     guid: d404fd949d771fd458e792c6e1f9c35b
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/Playtest_Full.unity
     guid: bcab1ac80d2da8d4da2762339694cc4f
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/animation_Trial.unity
     guid: 03bca54c96c4d694e853d8c799dd16a6
   - enabled: 1
