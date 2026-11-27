@@ -12,7 +12,7 @@ These are stand-ins until the real sound is made. Every file below is listed wit
 | SFX_Swap.ogg | navigation_transition-right.ogg | Google, Material Design product sounds | CC BY 4.0 | Yes |
 | SFX_SwapRejected.ogg | navigation_unavailable-selection.ogg | Google, Material Design product sounds | CC BY 4.0 | Yes |
 | SFX_PositionLost.ogg | ui_lock.ogg | Google, Material Design product sounds | CC BY 4.0 | Yes |
-| AMB_FacilityHum.mp3 | "Refrigeration unit" (id 3597) | BigSoundBank.com, https://bigsoundbank.com/refrigeration-unit-s3597.html | CC0 1.0 | No (courtesy credit to BigSoundBank.com is fine) |
+| AMB_FacilityHum.mp3 | "Refrigeration unit" (id 3597) | BigSoundBank.com, https://bigsoundbank.com/refrigeration-unit-s3597.html | CC0 1.0 | No (courtesy credit to BigSoundBank.com is fine). **Not used since 26 Nov 2026:** removed from every scene at the user's request; the file is kept but nothing plays it |
 | MUS_Drone.mp3 | "Tibetan bowl singing" (id 1109) | BigSoundBank.com, https://bigsoundbank.com/tibetan-bowl-singing-s1109.html | CC0 1.0 | No |
 
 **Google Material sounds**
