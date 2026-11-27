@@ -18,7 +18,9 @@ namespace TheSpaceBetween.Tests
     public class AnimationTrialTests : InputTestFixture
     {
         private const string SceneName = "animation_Trial";
-        private const float StandingOffset = 1.08f;
+        // The player's root above the floor when standing: half the 2 m capsule, less its 0.11 centre (raised 26 Nov so
+        // the boots touch the floor), plus the 0.08 skin width.
+        private const float StandingOffset = 0.97f;
         private const float BarrierX = 12f;
         private const float HoodStart = 24f;
         private const float HoodEnd = 31f;
