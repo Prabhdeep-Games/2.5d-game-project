@@ -180,12 +180,32 @@ namespace TheSpaceBetween
         /// </summary>
         public void Fail()
         {
+            Fail(null);
+        }
+
+        /// <summary>
+        /// The same, with the title the Facility UI shows instead of its usual "position lost", for example "CONTAINED"
+        /// when the security drones catch the player. Null keeps the usual title.
+        /// </summary>
+        public void Fail(string title)
+        {
+            FailureTitle = title;
             if (FailureHandler != null && FailureHandler(this))
             {
                 return;
             }
 
+            FailureTitle = null;
             ResetRoom();
+        }
+
+        /// <summary>The title of the failure being played, set by Fail(title) until the Facility UI has shown it. Null otherwise.</summary>
+        public string FailureTitle { get; private set; }
+
+        /// <summary>Called by the Facility UI once it has read the failure title.</summary>
+        public void ClearFailureTitle()
+        {
+            FailureTitle = null;
         }
 
         /// <summary>Moves every listed object back to its start and the player to the entry point.</summary>

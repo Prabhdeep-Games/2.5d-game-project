@@ -14,6 +14,14 @@ namespace TheSpaceBetween
     /// Safety: it never changes time while the game is paused or a swap has stopped time; it ends at once on a
     /// "position lost" return, a level change, a cutscene or the ending; and it can never last longer than Max Total
     /// Seconds of real time. Normal time and the physics step are always restored.
+    ///
+    /// Two more triggers serve the wall run, and only inside their box, so ordinary jumps and wall jumps elsewhere are
+    /// never slowed:
+    /// - Wall Run Start: the moment a wall run begins (real contact with a runnable surface). Holds for Hold Seconds.
+    /// - Before Wall Jump: while the player wall runs inside the box, so time is already slow as the obstruction comes
+    ///   up; it holds through the wall jump until the opposite wall is caught (or Max Air Seconds after the jump), then
+    ///   eases back. Leaving the wall any other way ends it.
+    /// Play Once makes a moment play a single time; Rearm lets it play again, for example after a failed attempt.
     /// </summary>
     [RequireComponent(typeof(BoxCollider))]
     public sealed class SlowMotionMoment : MonoBehaviour
@@ -33,6 +41,15 @@ namespace TheSpaceBetween
 
         [Tooltip("Plays on the first attempt, then once every this many attempts. 1 plays every time.")]
         [SerializeField, Min(1)] private int playEvery = 2;
+
+        [Tooltip("What starts the moment. Ground Jump: leaving the ground fast. Wall Run Start: a wall run beginning. Before Wall Jump: wall running inside the box, held through the wall jump until the next wall is caught.")]
+        [SerializeField] private TriggerKind trigger = TriggerKind.GroundJump;
+
+        [Tooltip("Play a single time, until Rearm is called.")]
+        [SerializeField] private bool playOnce;
+
+        [Tooltip("Wall Run Start: real seconds held at the slow speed before easing back.")]
+        [SerializeField, Min(0f)] private float holdSeconds = 1.1f;
 
         //==================== EFFECT =====================
         [Header("Effect")]
@@ -63,7 +80,15 @@ namespace TheSpaceBetween
         [ReadOnly, SerializeField] private int attempts;
         [ReadOnly, SerializeField] private int plays;
 
-        private enum Phase { Idle, Air, Landing, Out }
+        /// <summary>What starts a moment.</summary>
+        public enum TriggerKind
+        {
+            GroundJump,
+            WallRunStart,
+            BeforeWallJump
+        }
+
+        private enum Phase { Idle, Air, Landing, Hold, Approach, Transfer, Out }
 
         private BoxCollider area;
         private SwapAbility swap;
@@ -74,6 +99,7 @@ namespace TheSpaceBetween
         private float totalSeconds;
         private float holdUntil;
         private bool wasGrounded = true;
+        private bool wasWallRunning;
         private int lastTriggerFrame = -1;
 
         /// <summary>True while any slow-motion moment is running.</summary>
@@ -83,6 +109,26 @@ namespace TheSpaceBetween
         public int Attempts => attempts;
         public int Plays => plays;
         public string CurrentPhase => phase;
+        public TriggerKind Trigger => trigger;
+
+        /// <summary>True once a Play Once moment has played; Rearm clears it.</summary>
+        public bool Spent => playOnce && plays > 0;
+
+        /// <summary>Lets a Play Once moment play again.</summary>
+        public void Rearm()
+        {
+            plays = 0;
+            attempts = 0;
+        }
+
+        /// <summary>Ends whichever moment is running and restores normal time at once, for a failure or a scene change.</summary>
+        public static void CancelActive()
+        {
+            if (active != null)
+            {
+                active.Stop(true);
+            }
+        }
 
         //==================== LIFECYCLE =====================
         private void Reset()
@@ -118,6 +164,7 @@ namespace TheSpaceBetween
             {
                 player.Jumped += OnJumped;
                 player.Landed += OnLanded;
+                player.WallJumped += OnWallJumped;
             }
         }
 
@@ -127,6 +174,7 @@ namespace TheSpaceBetween
             {
                 player.Jumped -= OnJumped;
                 player.Landed -= OnLanded;
+                player.WallJumped -= OnWallJumped;
             }
 
             if (active == this)
@@ -139,14 +187,36 @@ namespace TheSpaceBetween
         {
             if (player != null)
             {
-                // Running off the edge counts as well as a jump.
                 bool grounded = player.IsGrounded;
-                if (wasGrounded && !grounded && Inside())
+                bool wallRunning = player.IsWallRunning;
+                switch (trigger)
                 {
-                    TryStart();
+                    case TriggerKind.GroundJump:
+                        // Running off the edge counts as well as a jump.
+                        if (wasGrounded && !grounded && Inside())
+                        {
+                            TryStart();
+                        }
+
+                        break;
+                    case TriggerKind.WallRunStart:
+                        if (!wasWallRunning && wallRunning && Inside())
+                        {
+                            TryStart();
+                        }
+
+                        break;
+                    case TriggerKind.BeforeWallJump:
+                        if (wallRunning && player.SurfaceSpeed > 0f && Inside())
+                        {
+                            TryStart();
+                        }
+
+                        break;
                 }
 
                 wasGrounded = grounded;
+                wasWallRunning = wallRunning;
             }
 
             if (active == this)
@@ -158,9 +228,18 @@ namespace TheSpaceBetween
         //==================== TRIGGER =====================
         private void OnJumped(bool fromWall)
         {
-            if (!fromWall && Inside())
+            if (trigger == TriggerKind.GroundJump && !fromWall && Inside())
             {
                 TryStart();
+            }
+        }
+
+        private void OnWallJumped()
+        {
+            if (active == this && state == Phase.Approach)
+            {
+                SetPhase(Phase.Transfer);
+                Log("wall jump: held until the next wall");
             }
         }
 
@@ -172,20 +251,23 @@ namespace TheSpaceBetween
         private void TryStart()
         {
             // A jump fires both the Jumped event and the leave-ground check in the same frame.
-            if (lastTriggerFrame == Time.frameCount || active != null || Held())
+            if (lastTriggerFrame == Time.frameCount || active != null || Held() || Spent)
             {
                 return;
             }
 
-            Vector3 velocity = player.Velocity;
-            if (new Vector2(velocity.x, velocity.z).magnitude < minimumSpeed && player.SurfaceSpeed < minimumSpeed)
+            if (trigger == TriggerKind.GroundJump)
             {
-                return;
+                Vector3 velocity = player.Velocity;
+                if (new Vector2(velocity.x, velocity.z).magnitude < minimumSpeed && player.SurfaceSpeed < minimumSpeed)
+                {
+                    return;
+                }
             }
 
             lastTriggerFrame = Time.frameCount;
             attempts++;
-            if ((attempts - 1) % playEvery != 0)
+            if (trigger == TriggerKind.GroundJump && (attempts - 1) % playEvery != 0)
             {
                 Log($"attempt {attempts}: normal speed this time");
                 return;
@@ -193,7 +275,7 @@ namespace TheSpaceBetween
 
             plays++;
             active = this;
-            SetPhase(Phase.Air);
+            SetPhase(trigger == TriggerKind.WallRunStart ? Phase.Hold : trigger == TriggerKind.BeforeWallJump ? Phase.Approach : Phase.Air);
             totalSeconds = 0f;
             Log($"attempt {attempts}: slow motion");
         }
@@ -245,6 +327,29 @@ namespace TheSpaceBetween
                     }
 
                     if (phaseSeconds >= holdUntil)
+                    {
+                        SetPhase(Phase.Out);
+                    }
+
+                    break;
+                case Phase.Hold:
+                    if (phaseSeconds >= holdSeconds)
+                    {
+                        SetPhase(Phase.Out);
+                    }
+
+                    break;
+                case Phase.Approach:
+                    // Off the wall without a wall jump (let go, or stopped by the obstruction): the moment is over.
+                    if (!player.IsWallRunning && !player.IsInWallJump)
+                    {
+                        SetPhase(Phase.Out);
+                    }
+
+                    break;
+                case Phase.Transfer:
+                    // The opposite wall is caught (or the ground reached): normal time comes back.
+                    if (player.IsWallRunning || player.IsGrounded || phaseSeconds >= maxAirSeconds)
                     {
                         SetPhase(Phase.Out);
                     }
