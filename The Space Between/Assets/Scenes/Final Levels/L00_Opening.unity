@@ -3041,6 +3041,9 @@ MonoBehaviour:
     showFrom: {fileID: 384146211}
     hideWhenKeyMissing: 0
     security: 0
+    onlyWhile: {fileID: 0}
+    blinkKey: 0
+    nearPlayer: 0
   - name: Run
     text: '{Run}  RUN'
     room: {fileID: 0}
@@ -3053,6 +3056,9 @@ MonoBehaviour:
     showFrom: {fileID: 932023127}
     hideWhenKeyMissing: 0
     security: 0
+    onlyWhile: {fileID: 0}
+    blinkKey: 0
+    nearPlayer: 0
   - name: Slide
     text: '{Slide}  SLIDE WHILE RUNNING'
     room: {fileID: 0}
@@ -3065,6 +3071,9 @@ MonoBehaviour:
     showFrom: {fileID: 275672176}
     hideWhenKeyMissing: 1
     security: 0
+    onlyWhile: {fileID: 0}
+    blinkKey: 0
+    nearPlayer: 0
   - name: Jump
     text: '{Jump}  JUMP'
     room: {fileID: 0}
@@ -3077,6 +3086,9 @@ MonoBehaviour:
     showFrom: {fileID: 968036187}
     hideWhenKeyMissing: 0
     security: 0
+    onlyWhile: {fileID: 0}
+    blinkKey: 0
+    nearPlayer: 0
   hintFontSize: 30
   endFontSize: 40
   fadeSeconds: 0.25
@@ -15786,7 +15798,7 @@ MonoBehaviour:
   standPoint: {fileID: 2101942125}
   crawlState: Crawl
   getUpState: GetUp
-  crawlSpeed: 0.7
+  crawlSpeed: 0.47
   chamberHoldSeconds: 2.5
   pauseSeconds: 1.2
   standSeconds: 1.6
@@ -22037,8 +22049,15 @@ MonoBehaviour:
   - {fileID: 877756932}
   - {fileID: 839865144}
   remainingLight: 0.15
-  nextScene: L01_TestingChamber
+  nextScene: L01_SectorPursuit
+  loadingMessage: 
   mechanicalSound: {fileID: 2142064910}
+  runStarted:
+    m_PersistentCalls:
+      m_Calls: []
+  emptyFrame:
+    m_PersistentCalls:
+      m_Calls: []
   stage: Waiting
 --- !u!65 &1136529887
 BoxCollider:
@@ -26879,6 +26898,7 @@ MonoBehaviour:
   zoneBlendSpeed: 8
   framingWeight: 0
   zoneDistance: 0
+  pulseDistance: 0
 --- !u!114 &1365317845
 MonoBehaviour:
   m_ObjectHideFlags: 0
